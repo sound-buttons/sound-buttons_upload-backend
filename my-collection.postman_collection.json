@@ -1,0 +1,54 @@
+{
+	"info": {
+		"_postman_id": "479d8b64-2b71-4825-aadb-cfb7f308af98",
+		"name": "my-collection",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "https://soundbuttons.azure-api.net/sound-buttons",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "name",
+							"value": "test2",
+							"type": "text"
+						},
+						{
+							"key": "directory",
+							"value": "tama",
+							"type": "text"
+						},
+						{
+							"key": "file",
+							"type": "file",
+							"src": "/C:/Users/jim60105/Desktop/sensei.mp3"
+						}
+					],
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://soundbuttons.azure-api.net/sound-buttons",
+					"protocol": "https",
+					"host": [
+						"soundbuttons",
+						"azure-api",
+						"net"
+					],
+					"path": [
+						"sound-buttons"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
