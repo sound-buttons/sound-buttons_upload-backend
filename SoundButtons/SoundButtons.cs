@@ -71,45 +71,38 @@ namespace SoundButtons {
 
                 #region Json File
                 // Get last json file
-                string lastJsonUri = cloudBlobContainer.ListBlobs($"{directory}/UploadJson", true).LastOrDefault()?.Uri.AbsolutePath;
-                if (string.IsNullOrEmpty(lastJsonUri)) {
-                    return (ActionResult)new InternalServerErrorResult();
-                }
-                // Change : /sound-buttons/tama/UploadJson/2021-04-05-22-49.json
-                // to     : tama/UploadJson/2021-04-05-22-49.json
-                lastJsonUri = lastJsonUri[(lastJsonUri.IndexOf("/") + 1)..];
-                lastJsonUri = lastJsonUri[(lastJsonUri.IndexOf("/") + 1)..];
-                log.LogInformation($"Last json file: {lastJsonUri}");
-                CloudBlockBlob jsonBlob = cloudBlobContainer.GetBlockBlobReference(lastJsonUri);
+                CloudBlockBlob jsonBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/{directory}.json");
 
+                JsonRoot root;
                 // Read last json file
                 using (Stream input = jsonBlob.OpenRead()) {
-                    JsonRoot root = await JsonSerializer.DeserializeAsync<JsonRoot>(input, new JsonSerializerOptions {
+                     root = await JsonSerializer.DeserializeAsync<JsonRoot>(input, new JsonSerializerOptions {
                         ReadCommentHandling = JsonCommentHandling.Skip,
                         AllowTrailingCommas = true,
                         // For Unicode and '&' characters
                         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
                     });
-
-                    // Get new json file block
-                    CloudBlockBlob newjsonBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/UploadJson/{DateTime.Now:yyyy-MM-dd-HH-mm}.json");
-
-                    newjsonBlob.Properties.ContentType = "application/json";
-                    // Generate new json file
-                    var result = JsonSerializer.SerializeToUtf8Bytes<JsonRoot>(
-                        UpdateJson(root,
-                            directory,
-                            filename,
-                            req.Form,
-                            sasContainerToken),
-                        new JsonSerializerOptions {
-                            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-                            WriteIndented = true
-                        });
-
-                    // Write new json file
-                    await newjsonBlob.UploadFromByteArrayAsync(result, 0, result.Length);
                 }
+
+                // Get new json file block
+                CloudBlockBlob newjsonBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/UploadJson/{DateTime.Now:yyyy-MM-dd-HH-mm}.json");
+
+                newjsonBlob.Properties.ContentType = "application/json";
+                // Generate new json file
+                var result = JsonSerializer.SerializeToUtf8Bytes<JsonRoot>(
+                    UpdateJson(root,
+                        directory,
+                        filename,
+                        req.Form,
+                        sasContainerToken),
+                    new JsonSerializerOptions {
+                        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+                        WriteIndented = true
+                    });
+
+                // Write new json file
+                await newjsonBlob.UploadFromByteArrayAsync(result, 0, result.Length);
+                await jsonBlob.UploadFromByteArrayAsync(result, 0, result.Length);
                 #endregion
 
                 return (ActionResult)new OkObjectResult(new { name = filename });
