@@ -6,7 +6,7 @@
 	},
 	"item": [
 		{
-			"name": "https://soundbuttons.azure-api.net/sound-buttons",
+			"name": "local",
 			"request": {
 				"method": "POST",
 				"header": [],
@@ -14,8 +14,8 @@
 					"mode": "formdata",
 					"formdata": [
 						{
-							"key": "name",
-							"value": "test2",
+							"key": "nameZH",
+							"value": "中文名",
 							"type": "text"
 						},
 						{
@@ -27,13 +27,68 @@
 							"key": "file",
 							"type": "file",
 							"src": "/C:/Users/jim60105/Desktop/sensei.mp3"
+						},
+						{
+							"key": "group",
+							"value": "groupTest",
+							"type": "text"
+						},
+						{
+							"key": "nameJP",
+							"value": "たま",
+							"type": "text"
 						}
+					]
+				},
+				"url": {
+					"raw": "http://localhost:7071/api/sound-buttons",
+					"protocol": "http",
+					"host": [
+						"localhost"
 					],
-					"options": {
-						"raw": {
-							"language": "json"
+					"port": "7071",
+					"path": [
+						"api",
+						"sound-buttons"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "azure-function",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "nameZH",
+							"value": "中文名3",
+							"type": "text"
+						},
+						{
+							"key": "directory",
+							"value": "tama",
+							"type": "text"
+						},
+						{
+							"key": "group",
+							"value": "詠唱",
+							"type": "text"
+						},
+						{
+							"key": "nameJP",
+							"value": "たま",
+							"type": "text"
+						},
+						{
+							"key": "file",
+							"type": "file",
+							"src": "/C:/Users/jim60105/Desktop/sensei.mp3"
 						}
-					}
+					]
 				},
 				"url": {
 					"raw": "https://soundbuttons.azure-api.net/sound-buttons",
