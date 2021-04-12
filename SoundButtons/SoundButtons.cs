@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -130,9 +131,24 @@ namespace SoundButtons
 
         private static JsonRoot UpdateJson(JsonRoot root, string directory, string filename, IFormCollection form, string SASToken)
         {
+            // Variables prepare
             string baseRoute = $"https://jim60105.blob.core.windows.net/sound-buttons/{directory}/";
-            string group = form.GetFirstValue("group") ?? "未分類";
 
+            string group = form.GetFirstValue("group") ?? "未分類";
+            _ = int.TryParse(form.GetFirstValue("start"), out int start);
+            _ = double.TryParse(form.GetFirstValue("end"), out double end);
+            end = Math.Ceiling(end);
+            string videoId = form.GetFirstValue("videoId") ?? "";
+            if (videoId.StartsWith("https://youtu.be/"))
+            {
+                videoId = Regex.Match(videoId, "^.*/([^?]*).*$").Value;
+            }
+            else if (videoId.StartsWith("https://www.youtube.com/watch"))
+            {
+                videoId = Regex.Match(videoId, "^.*[?&]v=([^&]*).*$").Value;
+            }
+
+            // Get ButtonGrop if exists, or new one
             ButtonGroup buttonGroup = null;
             foreach (var btg in root.buttonGroups)
             {
@@ -160,9 +176,7 @@ namespace SoundButtons
                 root.buttonGroups.Add(buttonGroup);
             }
 
-            _ = int.TryParse(form.GetFirstValue("start"), out int start);
-            _ = double.TryParse(form.GetFirstValue("end"), out double end);
-            end = Math.Ceiling(end);
+            // Add button
             buttonGroup.buttons.Add(new Button(
                 filename,
                 new Text(
@@ -170,7 +184,7 @@ namespace SoundButtons
                     form.GetFirstValue("nameJP") ?? ""
                 ),
                 new Source(
-                    form.GetFirstValue("videoId") ?? "",
+                    System.Web.HttpUtility.UrlEncode(videoId),  // Prevent script injection
                     start,
                     (int)end
                 ),
