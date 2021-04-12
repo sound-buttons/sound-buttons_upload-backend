@@ -6,7 +6,6 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using System.Web.Http;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Storage.Blob;
@@ -14,22 +13,25 @@ using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Extensions.Logging;
 
-namespace SoundButtons {
-    public static class SoundButtons {
-        private static ILogger logger;
+namespace SoundButtons
+{
+    public static class SoundButtons
+    {
         [FunctionName("sound-buttons")]
         public static async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
                                                     ILogger log,
-                                                    [Blob("sound-buttons"), StorageAccount("AzureWebJobsStorage")] CloudBlobContainer cloudBlobContainer) {
-            logger = log;
+                                                    [Blob("sound-buttons"), StorageAccount("AzureWebJobsStorage")] CloudBlobContainer cloudBlobContainer)
+        {
             string contentType = req.ContentType;
             log.LogInformation($"Content-Type: {contentType}");
 
-            if (contentType.Contains("multipart/form-data;")) {
+            if (contentType.Contains("multipart/form-data;"))
+            {
                 #region Audio file
                 // Get audio file
                 IFormFileCollection files = req.Form.Files;
-                if (files.Count <= 0) {
+                if (files.Count <= 0)
+                {
                     return new BadRequestResult();
                 }
                 IFormFile file = files[0];
@@ -44,7 +46,8 @@ namespace SoundButtons {
 
                 // Get a new file name on blob storage
                 CloudBlockBlob cloudBlockBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/{filename + fileExtension}");
-                if (cloudBlockBlob.Exists()) {
+                if (cloudBlockBlob.Exists())
+                {
                     filename += $"_{DateTime.Now.Ticks}";
                     cloudBlockBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/{filename + fileExtension}");
                 }
@@ -59,12 +62,14 @@ namespace SoundButtons {
                 cloudBlockBlob.Metadata.Add("origName", file.FileName);
 
                 string ip = req.Headers.FirstOrDefault(x => x.Key == "X-Forwarded-For").Value.FirstOrDefault();
-                if (null != ip) {
+                if (null != ip)
+                {
                     cloudBlockBlob.Metadata.Add("sourceIp", ip);
                 }
 
                 // Write audio file 
-                using (var stream = file.OpenReadStream()) {
+                using (var stream = file.OpenReadStream())
+                {
                     await cloudBlockBlob.UploadFromStreamAsync(stream);
                 }
                 #endregion
@@ -75,8 +80,10 @@ namespace SoundButtons {
 
                 JsonRoot root;
                 // Read last json file
-                using (Stream input = jsonBlob.OpenRead()) {
-                     root = await JsonSerializer.DeserializeAsync<JsonRoot>(input, new JsonSerializerOptions {
+                using (Stream input = jsonBlob.OpenRead())
+                {
+                    root = await JsonSerializer.DeserializeAsync<JsonRoot>(input, new JsonSerializerOptions
+                    {
                         ReadCommentHandling = JsonCommentHandling.Skip,
                         AllowTrailingCommas = true,
                         // For Unicode and '&' characters
@@ -95,7 +102,8 @@ namespace SoundButtons {
                         filename,
                         req.Form,
                         sasContainerToken),
-                    new JsonSerializerOptions {
+                    new JsonSerializerOptions
+                    {
                         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
                         WriteIndented = true
                     });
@@ -110,43 +118,61 @@ namespace SoundButtons {
             return (ActionResult)new BadRequestResult();
         }
 
-        private static string GetFirstValue(this IFormCollection form, string name) {
+        private static string GetFirstValue(this IFormCollection form, string name)
+        {
             string result = null;
-            if (form.TryGetValue(name, out var sv) && sv.Count > 0 && !string.IsNullOrEmpty(sv[0])) {
+            if (form.TryGetValue(name, out var sv) && sv.Count > 0 && !string.IsNullOrEmpty(sv[0]))
+            {
                 result = sv[0];
             }
             return result;
         }
 
-        private static JsonRoot UpdateJson(JsonRoot root, string directory, string filename, IFormCollection form, string SASToken) {
+        private static JsonRoot UpdateJson(JsonRoot root, string directory, string filename, IFormCollection form, string SASToken)
+        {
             string baseRoute = $"https://jim60105.blob.core.windows.net/sound-buttons/{directory}/";
-            string group = form.GetFirstValue("group") ?? "default";
+            string group = form.GetFirstValue("group") ?? "未分類";
 
             ButtonGroup buttonGroup = null;
-            foreach (var btg in root.buttonGroups) {
-                try {
+            foreach (var btg in root.buttonGroups)
+            {
+                try
+                {
                     var name = btg.name.ZhTw;
 
-                    if (group == name) {
+                    if (group == name)
+                    {
                         buttonGroup = btg;
 
                         break;
                     }
-                } catch (InvalidCastException) { }
+                }
+                catch (InvalidCastException) { }
             }
-            if (null == buttonGroup) {
-                buttonGroup = new ButtonGroup();
-                buttonGroup.name = new Text(group, group);
-                buttonGroup.baseRoute = baseRoute;
-                buttonGroup.buttons = new List<Button>();
+            if (null == buttonGroup)
+            {
+                buttonGroup = new ButtonGroup
+                {
+                    name = new Text(group, group),
+                    baseRoute = baseRoute,
+                    buttons = new List<Button>()
+                };
                 root.buttonGroups.Add(buttonGroup);
             }
 
+            _ = int.TryParse(form.GetFirstValue("start"), out int start);
+            _ = double.TryParse(form.GetFirstValue("end"), out double end);
+            end = Math.Ceiling(end);
             buttonGroup.buttons.Add(new Button(
                 filename,
                 new Text(
                     form.GetFirstValue("nameZH") ?? "",
                     form.GetFirstValue("nameJP") ?? ""
+                ),
+                new Source(
+                    form.GetFirstValue("videoId") ?? "",
+                    start,
+                    (int)end
                 ),
                 SASToken
             ));
@@ -155,51 +181,81 @@ namespace SoundButtons {
         }
 
         #region POCO
-        public class Color {
+#pragma warning disable IDE1006 // 命名樣式
+        public class Color
+        {
             public string primary { get; set; }
             public string secondary { get; set; }
+
+            public Color() { }
         }
 
-        public class Link {
+        public class Link
+        {
             public string youtube { get; set; }
             public string twitter { get; set; }
             public string facebook { get; set; }
             public string other { get; set; }
+
+            public Link() { }
         }
 
-        public class Text {
+        public class Text
+        {
             [JsonPropertyName("zh-tw")]
             public string ZhTw { get; set; }
             public string ja { get; set; }
 
             public Text() { }
 
-            public Text(string zhTw, string ja) {
+            public Text(string zhTw, string ja)
+            {
                 ZhTw = zhTw;
                 this.ja = ja;
             }
         }
 
-        public class IntroButton : Button {
+        public class IntroButton : Button
+        {
         }
 
-        public class Button {
+        public class Source
+        {
+            public string videoId { get; set; }
+            public int start { get; set; }
+            public int end { get; set; }
+
+            public Source() { }
+
+            public Source(string videoId, int start, int end)
+            {
+                this.videoId = videoId;
+                this.start = start;
+                this.end = end;
+            }
+        }
+
+        public class Button
+        {
             public string filename { get; set; }
             public object text { get; set; }
             public string baseRoute { get; set; }
-            public string source { get; set; }
+            public Source source { get; set; }
             public string SASToken { get; set; }
 
             public Button() { }
 
-            public Button(string filename, object text, string sASToken) {
+            public Button(string filename, object text, Source source, string sASToken)
+            {
                 this.filename = filename;
                 this.text = text;
+                this.source = source;
                 SASToken = sASToken;
             }
         }
 
-        public class ButtonGroup {
+        public class ButtonGroup
+        {
             public Text name { get; set; }
             public string baseRoute { get; set; }
             public List<Button> buttons { get; set; }
@@ -207,7 +263,8 @@ namespace SoundButtons {
             public ButtonGroup() { }
         }
 
-        public class JsonRoot {
+        public class JsonRoot
+        {
             public string name { get; set; }
             public string fullName { get; set; }
             public string fullConfigURL { get; set; }
@@ -217,7 +274,10 @@ namespace SoundButtons {
             public Link link { get; set; }
             public IntroButton introButton { get; set; }
             public List<ButtonGroup> buttonGroups { get; set; }
+
+            public JsonRoot() { }
         }
+#pragma warning restore IDE1006 // 命名樣式
         #endregion
     }
 }
