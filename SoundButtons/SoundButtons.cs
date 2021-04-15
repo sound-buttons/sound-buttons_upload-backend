@@ -13,6 +13,10 @@ using Microsoft.Azure.Storage.Blob;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Extensions.Logging;
+using YoutubeDLSharp;
+using YoutubeDLSharp.Options;
+using Xabe.FFmpeg;
+using Xabe.FFmpeg.Downloader;
 
 namespace SoundButtons
 {
@@ -26,97 +30,156 @@ namespace SoundButtons
             string contentType = req.ContentType;
             log.LogInformation($"Content-Type: {contentType}");
 
-            if (contentType.Contains("multipart/form-data;"))
+            string filename, fileExtension = "", contenType = "";
+            filename = req.Form.GetFirstValue("nameZH") ?? Guid.NewGuid().ToString("n");
+            filename = filename.Replace("\"", "").Replace(" ", "_");
+            string origFileName = filename;
+
+            log.LogInformation("FileName: {filename}", filename);
+
+            string directory = req.Form.GetFirstValue("directory") ?? "test";
+            log.LogInformation($"Directory: {directory}");
+
+            string videoId = req.Form.GetFirstValue("videoId");
+            int.TryParse(req.Form.GetFirstValue("start"), out int start);
+            int.TryParse(req.Form.GetFirstValue("end"), out int end);
+
+            string tempPath = Path.GetTempFileName();
+
+            if (!contentType.Contains("multipart/form-data;"))
+                return (ActionResult)new BadRequestResult();
+
+            #region Process audio file
+            // Get audio file
+            IFormFileCollection files = req.Form.Files;
+            log.LogInformation("Files Count: {fileCount}", files.Count);
+            log.LogInformation("{videoId}: {start}, {end}", videoId, start, end);
+            if (files.Count > 0)
             {
-                #region Audio file
-                // Get audio file
-                IFormFileCollection files = req.Form.Files;
-                if (files.Count <= 0)
-                {
-                    return new BadRequestResult();
-                }
                 IFormFile file = files[0];
-
                 // Get file info
-                string filename = req.Form.GetFirstValue("nameZH") ?? Guid.NewGuid().ToString("n");
-                filename = filename.Replace("\"", "").Replace(" ", "_");
-                string directory = req.Form.GetFirstValue("directory") ?? "test";
-                log.LogInformation($"Directory: {directory}");
-                string fileExtension = Path.GetExtension(file.FileName) ?? "";
+                fileExtension = Path.GetExtension(file.FileName) ?? "";
+                tempPath = Path.ChangeExtension(tempPath, fileExtension);
                 log.LogInformation($"Get extension: {fileExtension}");
-
-                // Get a new file name on blob storage
-                CloudBlockBlob cloudBlockBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/{filename + fileExtension}");
-                if (cloudBlockBlob.Exists())
+                origFileName = file.FileName;
+                using (var fs = new FileStream(tempPath, FileMode.OpenOrCreate, FileAccess.Write))
                 {
-                    filename += $"_{DateTime.Now.Ticks}";
-                    cloudBlockBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/{filename + fileExtension}");
+                    file.CopyTo(fs);
+                    log.LogInformation("Write file from upload.");
                 }
-                filename += fileExtension;
-                log.LogInformation($"Filename: {filename}");
-
-                // Get a new SAS token for the file
-                string sasContainerToken = cloudBlockBlob.GetSharedAccessSignature(null, "ッ的");
-
-                // Set info on the blob storage block
-                cloudBlockBlob.Properties.ContentType = file.ContentType;
-                cloudBlockBlob.Metadata.Add("origName", file.FileName);
-
-                string ip = req.Headers.FirstOrDefault(x => x.Key == "X-Forwarded-For").Value.FirstOrDefault();
-                if (null != ip)
-                {
-                    cloudBlockBlob.Metadata.Add("sourceIp", ip);
-                }
-
-                // Write audio file 
-                using (var stream = file.OpenReadStream())
-                {
-                    await cloudBlockBlob.UploadFromStreamAsync(stream);
-                }
-                #endregion
-
-                #region Json File
-                // Get last json file
-                CloudBlockBlob jsonBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/{directory}.json");
-
-                JsonRoot root;
-                // Read last json file
-                using (Stream input = jsonBlob.OpenRead())
-                {
-                    root = await JsonSerializer.DeserializeAsync<JsonRoot>(input, new JsonSerializerOptions
-                    {
-                        ReadCommentHandling = JsonCommentHandling.Skip,
-                        AllowTrailingCommas = true,
-                        // For Unicode and '&' characters
-                        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-                    });
-                }
-
-                // Get new json file block
-                CloudBlockBlob newjsonBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/UploadJson/{DateTime.Now:yyyy-MM-dd-HH-mm}.json");
-
-                newjsonBlob.Properties.ContentType = "application/json";
-                // Generate new json file
-                var result = JsonSerializer.SerializeToUtf8Bytes<JsonRoot>(
-                    UpdateJson(root,
-                        directory,
-                        filename,
-                        req.Form,
-                        sasContainerToken),
-                    new JsonSerializerOptions
-                    {
-                        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-                        WriteIndented = true
-                    });
-
-                // Write new json file
-                await newjsonBlob.UploadFromByteArrayAsync(result, 0, result.Length);
-                await jsonBlob.UploadFromByteArrayAsync(result, 0, result.Length);
-                #endregion
-
-                return (ActionResult)new OkObjectResult(new { name = filename });
             }
-            return (ActionResult)new BadRequestResult();
+            else if (!string.IsNullOrEmpty(videoId) && end - start > 0)
+            {
+                //Get latest version of FFmpeg. It's great idea if you don't know if you had installed FFmpeg.
+                FFmpeg.SetExecutablesPath(".");
+                await FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official);
+
+                var ytdl = new YoutubeDL();
+                ytdl.OutputFolder = Path.GetTempPath();
+                ytdl.YoutubeDLPath = "Resources\\youtube-dl.exe";
+                log.LogInformation("OutPutFolder: {tempPat}", ytdl.OutputFolder);
+                ytdl.OutputFileTemplate = Path.GetFileNameWithoutExtension(tempPath) + "_org.%(ext)s";
+                var res = await ytdl.RunAudioDownload("https://www.youtube.com/watch?v=" + videoId, AudioConversionFormat.Best);
+
+                if (res.Success)
+                {
+                    string source = res.Data;
+                    log.LogInformation("Download audio stream: {sourcePath}", source);
+                    origFileName = Path.GetFileName(res.Data);
+                    fileExtension = Path.GetExtension(source);
+                    log.LogInformation($"Get extension: {fileExtension}");
+                    tempPath = Path.ChangeExtension(tempPath, fileExtension);
+
+                    IConversion conversion = await FFmpeg.Conversions.FromSnippet.Split(source, tempPath, TimeSpan.FromSeconds(start), TimeSpan.FromSeconds(end - start));
+                    IConversionResult convRes = await conversion.Start();
+                    log.LogInformation("Convert audio Finish: {path}", tempPath);
+                    log.LogInformation("Convert audio Finish in {duration} seconds.", convRes.Duration.TotalSeconds);
+                    File.Delete(res.Data);
+                }
+                else
+                {
+                    log.LogError(string.Join(", ", res.ErrorOutput));
+                    return (ActionResult)new BadRequestResult();
+                }
+            }
+            else { return (ActionResult)new BadRequestResult(); }
+
+            #endregion
+
+            #region Upload to Blob Storage
+            // Get a new file name on blob storage
+            CloudBlockBlob cloudBlockBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/{filename + fileExtension}");
+            if (cloudBlockBlob.Exists())
+            {
+                filename += $"_{DateTime.Now.Ticks}";
+                cloudBlockBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/{filename + fileExtension}");
+            }
+            filename += fileExtension;
+            log.LogInformation($"Filename: {filename}");
+
+            // Get a new SAS token for the file
+            string sasContainerToken = cloudBlockBlob.GetSharedAccessSignature(null, "ッ的");
+
+            // Set info on the blob storage block
+            cloudBlockBlob.Properties.ContentType = "audio/basic";
+            cloudBlockBlob.Metadata.Add("origName", origFileName);
+
+            string ip = req.Headers.FirstOrDefault(x => x.Key == "X-Forwarded-For").Value.FirstOrDefault();
+            if (null != ip)
+            {
+                cloudBlockBlob.Metadata.Add("sourceIp", ip);
+            }
+
+            // Write audio file 
+            using (var fs = new FileStream(tempPath, FileMode.Open))
+            {
+                await cloudBlockBlob.UploadFromStreamAsync(fs);
+            }
+            log.LogInformation("Upload audio to azure finish.");
+            File.Delete(tempPath);
+
+            #endregion
+
+            #region Json File
+            // Get last json file
+            CloudBlockBlob jsonBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/{directory}.json");
+
+            JsonRoot root;
+            // Read last json file
+            using (Stream input = jsonBlob.OpenRead())
+            {
+                root = await JsonSerializer.DeserializeAsync<JsonRoot>(input, new JsonSerializerOptions
+                {
+                    ReadCommentHandling = JsonCommentHandling.Skip,
+                    AllowTrailingCommas = true,
+                    // For Unicode and '&' characters
+                    Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+                });
+            }
+
+            // Get new json file block
+            CloudBlockBlob newjsonBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/UploadJson/{DateTime.Now:yyyy-MM-dd-HH-mm}.json");
+
+            newjsonBlob.Properties.ContentType = "application/json";
+            // Generate new json file
+            var result = JsonSerializer.SerializeToUtf8Bytes<JsonRoot>(
+                UpdateJson(root,
+                    directory,
+                    filename,
+                    req.Form,
+                    sasContainerToken),
+                new JsonSerializerOptions
+                {
+                    Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+                    WriteIndented = true
+                });
+
+            // Write new json file
+            await newjsonBlob.UploadFromByteArrayAsync(result, 0, result.Length);
+            await jsonBlob.UploadFromByteArrayAsync(result, 0, result.Length);
+            #endregion
+
+            return (ActionResult)new OkObjectResult(new { name = filename });
         }
 
         private static string GetFirstValue(this IFormCollection form, string name)
