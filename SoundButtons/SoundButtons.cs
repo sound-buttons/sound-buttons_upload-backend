@@ -72,7 +72,7 @@ namespace SoundButtons
             {
                 //Get latest version of FFmpeg. It's great idea if you don't know if you had installed FFmpeg.
                 FFmpeg.SetExecutablesPath(".");
-                await FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official);
+                Task task = FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official);
 
                 var ytdl = new YoutubeDL();
                 ytdl.OutputFolder = Path.GetTempPath();
@@ -90,6 +90,7 @@ namespace SoundButtons
                     log.LogInformation($"Get extension: {fileExtension}");
                     tempPath = Path.ChangeExtension(tempPath, fileExtension);
 
+                    task.Wait();
                     IConversion conversion = await FFmpeg.Conversions.FromSnippet.Split(source, tempPath, TimeSpan.FromSeconds(start), TimeSpan.FromSeconds(end - start));
                     IConversionResult convRes = await conversion.Start();
                     log.LogInformation("Convert audio Finish: {path}", tempPath);
@@ -175,8 +176,10 @@ namespace SoundButtons
                 });
 
             // Write new json file
-            await newjsonBlob.UploadFromByteArrayAsync(result, 0, result.Length);
-            await jsonBlob.UploadFromByteArrayAsync(result, 0, result.Length);
+            List<Task> tasks = new List<Task>(); 
+            tasks.Add(newjsonBlob.UploadFromByteArrayAsync(result, 0, result.Length));
+            tasks.Add(jsonBlob.UploadFromByteArrayAsync(result, 0, result.Length));
+            Task.WaitAll(tasks.ToArray());
             #endregion
 
             return (ActionResult)new OkObjectResult(new { name = filename });
