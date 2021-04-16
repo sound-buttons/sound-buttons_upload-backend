@@ -19,6 +19,11 @@
 							"type": "text"
 						},
 						{
+							"key": "nameJP",
+							"value": "たま",
+							"type": "text"
+						},
+						{
 							"key": "directory",
 							"value": "tama",
 							"type": "text"
@@ -26,7 +31,8 @@
 						{
 							"key": "file",
 							"type": "file",
-							"src": "/C:/Users/jim60105/Desktop/sensei.mp3"
+							"src": "/C:/Users/jim60105/Desktop/sensei.mp3",
+							"disabled": true
 						},
 						{
 							"key": "group",
@@ -34,8 +40,18 @@
 							"type": "text"
 						},
 						{
-							"key": "nameJP",
-							"value": "たま",
+							"key": "videoId",
+							"value": "9bLORkCTZt4",
+							"type": "text"
+						},
+						{
+							"key": "start",
+							"value": "4795",
+							"type": "text"
+						},
+						{
+							"key": "end",
+							"value": "4798",
 							"type": "text"
 						}
 					]
@@ -65,17 +81,7 @@
 					"formdata": [
 						{
 							"key": "nameZH",
-							"value": "中文名3",
-							"type": "text"
-						},
-						{
-							"key": "directory",
-							"value": "tama",
-							"type": "text"
-						},
-						{
-							"key": "group",
-							"value": "詠唱",
+							"value": "中文名",
 							"type": "text"
 						},
 						{
@@ -84,9 +90,35 @@
 							"type": "text"
 						},
 						{
+							"key": "directory",
+							"value": "tama",
+							"type": "text"
+						},
+						{
 							"key": "file",
 							"type": "file",
-							"src": "/C:/Users/jim60105/Desktop/sensei.mp3"
+							"src": "/C:/Users/jim60105/Desktop/sensei.mp3",
+							"disabled": true
+						},
+						{
+							"key": "group",
+							"value": "groupTest",
+							"type": "text"
+						},
+						{
+							"key": "videoId",
+							"value": "9bLORkCTZt4",
+							"type": "text"
+						},
+						{
+							"key": "start",
+							"value": "4795",
+							"type": "text"
+						},
+						{
+							"key": "end",
+							"value": "4798",
+							"type": "text"
 						}
 					]
 				},
