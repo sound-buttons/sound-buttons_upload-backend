@@ -13,10 +13,10 @@ using Microsoft.Azure.Storage.Blob;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Extensions.Logging;
-using YoutubeDLSharp;
-using YoutubeDLSharp.Options;
 using Xabe.FFmpeg;
 using Xabe.FFmpeg.Downloader;
+using YoutubeDLSharp;
+using YoutubeDLSharp.Options;
 
 namespace SoundButtons
 {
@@ -30,7 +30,7 @@ namespace SoundButtons
             string contentType = req.ContentType;
             log.LogInformation($"Content-Type: {contentType}");
 
-            string filename, fileExtension = "", contenType = "";
+            string filename, fileExtension = "";
             filename = req.Form.GetFirstValue("nameZH") ?? Guid.NewGuid().ToString("n");
             filename = filename.Replace("\"", "").Replace(" ", "_");
             string origFileName = filename;
@@ -44,7 +44,12 @@ namespace SoundButtons
             int.TryParse(req.Form.GetFirstValue("start"), out int start);
             int.TryParse(req.Form.GetFirstValue("end"), out int end);
 
-            string tempPath = Path.GetTempFileName();
+#if DEBUG
+            string tempDir = Path.GetTempPath();
+#else
+            string tempDir = @"C:\home\data";
+#endif
+            string tempPath = Path.Combine(tempDir, DateTime.Now.Ticks.ToString() + ".tmp");
 
             if (!contentType.Contains("multipart/form-data;"))
                 return (ActionResult)new BadRequestResult();
@@ -70,38 +75,73 @@ namespace SoundButtons
             }
             else if (!string.IsNullOrEmpty(videoId) && end - start > 0)
             {
-                //Get latest version of FFmpeg. It's great idea if you don't know if you had installed FFmpeg.
-                FFmpeg.SetExecutablesPath(".");
-                Task task = FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official);
+                //var ytdl = new YoutubeDL();
+                log.LogInformation("TempDir: {tempDir}", tempDir);
 
-                var ytdl = new YoutubeDL();
-                ytdl.OutputFolder = Path.GetTempPath();
-                ytdl.YoutubeDLPath = "Resources\\youtube-dl.exe";
-                log.LogInformation("OutPutFolder: {tempPat}", ytdl.OutputFolder);
-                ytdl.OutputFileTemplate = Path.GetFileNameWithoutExtension(tempPath) + "_org.%(ext)s";
-                var res = await ytdl.RunAudioDownload("https://www.youtube.com/watch?v=" + videoId, AudioConversionFormat.Best);
+                FFmpeg.SetExecutablesPath(tempDir);
+                Task task = FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official, FFmpeg.ExecutablesPath);
+                log.LogInformation("FFmpeg Path: {ffmpegPath}", FFmpeg.ExecutablesPath);
 
-                if (res.Success)
+                string youtubeDLPath = Path.Combine(tempDir, "youtube-dl.exe");
+                try
                 {
-                    string source = res.Data;
-                    log.LogInformation("Download audio stream: {sourcePath}", source);
-                    origFileName = Path.GetFileName(res.Data);
-                    fileExtension = Path.GetExtension(source);
-                    log.LogInformation($"Get extension: {fileExtension}");
-                    tempPath = Path.ChangeExtension(tempPath, fileExtension);
+                    var wc = new System.Net.WebClient();
+                    wc.DownloadFile(new Uri(@"https://github.com/blackjack4494/yt-dlc/releases/latest/download/youtube-dlc.exe"), youtubeDLPath);
+                    log.LogInformation("Download youtube-dl.exe at {ytdlPath}", youtubeDLPath);
 
-                    task.Wait();
-                    IConversion conversion = await FFmpeg.Conversions.FromSnippet.Split(source, tempPath, TimeSpan.FromSeconds(start), TimeSpan.FromSeconds(end - start));
-                    IConversionResult convRes = await conversion.Start();
-                    log.LogInformation("Convert audio Finish: {path}", tempPath);
-                    log.LogInformation("Convert audio Finish in {duration} seconds.", convRes.Duration.TotalSeconds);
-                    File.Delete(res.Data);
-                }
-                else
-                {
-                    log.LogError(string.Join(", ", res.ErrorOutput));
-                    return (ActionResult)new BadRequestResult();
-                }
+                    log.LogInformation("Start to download audio from {videoId}", videoId);
+
+                    OptionSet optionSet = new OptionSet
+                    {
+                        Format = "140/m4a/bestaudio",
+                        NoCheckCertificate = true,
+                        Output = tempPath.Replace(".tmp", "_org.%(ext)s")
+                    };
+
+                    string source = string.Empty;
+                    YoutubeDLProcess youtubeDLProcess = new YoutubeDLProcess(youtubeDLPath);
+
+                    youtubeDLProcess.OutputReceived += (object sender, System.Diagnostics.DataReceivedEventArgs e) =>
+                    {
+                        log.LogInformation(e.Data);
+
+                        Match match = new Regex("Destination: (.*)", RegexOptions.Compiled).Match(e.Data);
+                        if (match.Success)
+                        {
+                            source = match.Groups[1].ToString().Trim();
+                        }
+                    };
+                    youtubeDLProcess.ErrorReceived += (object sender, System.Diagnostics.DataReceivedEventArgs e)
+                        => log.LogError(e.Data);
+
+                    int res = await youtubeDLProcess.RunAsync(
+                        new string[] { @$"https://youtu.be/{videoId}" },
+                        optionSet,
+                        new System.Threading.CancellationToken());
+
+                    if (res == 0 && !string.IsNullOrEmpty(source))
+                    {
+                        try
+                        {
+                            log.LogInformation("Downloaded audio: {sourcePath}", source);
+                            fileExtension = Path.GetExtension(source);
+                            log.LogInformation("Get extension: {fileExtension}", fileExtension);
+                            tempPath = Path.ChangeExtension(tempPath, fileExtension);
+
+                            task.Wait();
+                            log.LogInformation("Start to cut audio");
+                            IConversion conversion = await FFmpeg.Conversions.FromSnippet.Split(source, tempPath, TimeSpan.FromSeconds(start), TimeSpan.FromSeconds(end - start));
+                            IConversionResult convRes = await conversion.Start();
+                            log.LogInformation("Cut audio Finish: {path}", tempPath);
+                            log.LogInformation("Cut audio Finish in {duration} seconds.", convRes.Duration.TotalSeconds);
+
+                            origFileName = $"{videoId}_{start}_{end}{fileExtension}";
+                        } finally {
+                            File.Delete(source);
+                        }
+                    }
+                    else { return (ActionResult)new BadRequestResult(); }
+                } finally { File.Delete(youtubeDLPath); }
             }
             else { return (ActionResult)new BadRequestResult(); }
 
@@ -131,13 +171,15 @@ namespace SoundButtons
                 cloudBlockBlob.Metadata.Add("sourceIp", ip);
             }
 
-            // Write audio file 
-            using (var fs = new FileStream(tempPath, FileMode.Open))
+            try
             {
-                await cloudBlockBlob.UploadFromStreamAsync(fs);
-            }
-            log.LogInformation("Upload audio to azure finish.");
-            File.Delete(tempPath);
+                // Write audio file 
+                using (var fs = new FileStream(tempPath, FileMode.Open))
+                {
+                    await cloudBlockBlob.UploadFromStreamAsync(fs);
+                }
+                log.LogInformation("Upload audio to azure finish.");
+            } finally { File.Delete(tempPath); }
 
             #endregion
 
@@ -176,7 +218,7 @@ namespace SoundButtons
                 });
 
             // Write new json file
-            List<Task> tasks = new List<Task>(); 
+            List<Task> tasks = new List<Task>();
             tasks.Add(newjsonBlob.UploadFromByteArrayAsync(result, 0, result.Length));
             tasks.Add(jsonBlob.UploadFromByteArrayAsync(result, 0, result.Length));
             Task.WaitAll(tasks.ToArray());
