@@ -35,6 +35,9 @@ namespace SoundButtons
 
             // 取得中文名稱做為檔名
             string filename, fileExtension = "";
+            if (!req.Form.ContainsKey("nameZH"))
+                return (ActionResult)new BadRequestResult();
+
             filename = req.Form.GetFirstValue("nameZH") ?? Guid.NewGuid().ToString("n");
             filename = filename.Replace("\"", "").Replace(" ", "_");
             string origFileName = filename;
@@ -76,7 +79,7 @@ namespace SoundButtons
                     log.LogInformation("Write file from upload.");
                 }
             }
-            else if (!string.IsNullOrEmpty(videoId) && end - start > 0)
+            else if (!string.IsNullOrEmpty(videoId) && end - start > 0 && end - start <= 60)
             {
                 log.LogInformation("TempDir: {tempDir}", tempDir);
 
@@ -144,7 +147,8 @@ namespace SoundButtons
                             log.LogInformation("Cut audio Finish in {duration} seconds.", convRes.Duration.TotalSeconds);
 
                             origFileName = $"{videoId}_{start}_{end}{fileExtension}";
-                        } finally {
+                        } finally
+                        {
                             File.Delete(source);
                         }
                     }
