@@ -27,19 +27,24 @@ namespace SoundButtons
                                                     ILogger log,
                                                     [Blob("sound-buttons"), StorageAccount("AzureWebJobsStorage")] CloudBlobContainer cloudBlobContainer)
         {
+            // 驗證ContentType為multipart/form-data
             string contentType = req.ContentType;
             log.LogInformation($"Content-Type: {contentType}");
+            if (!contentType.Contains("multipart/form-data;"))
+                return (ActionResult)new BadRequestResult();
 
+            // 取得中文名稱做為檔名
             string filename, fileExtension = "";
             filename = req.Form.GetFirstValue("nameZH") ?? Guid.NewGuid().ToString("n");
             filename = filename.Replace("\"", "").Replace(" ", "_");
             string origFileName = filename;
-
             log.LogInformation("FileName: {filename}", filename);
 
+            // 取得角色
             string directory = req.Form.GetFirstValue("directory") ?? "test";
             log.LogInformation($"Directory: {directory}");
 
+            // 取得youtube影片id和秒數
             string videoId = req.Form.GetFirstValue("videoId");
             int.TryParse(req.Form.GetFirstValue("start"), out int start);
             int.TryParse(req.Form.GetFirstValue("end"), out int end);
@@ -51,9 +56,6 @@ namespace SoundButtons
 #endif
             string tempPath = Path.Combine(tempDir, DateTime.Now.Ticks.ToString() + ".tmp");
 
-            if (!contentType.Contains("multipart/form-data;"))
-                return (ActionResult)new BadRequestResult();
-
             #region Process audio file
             // Get audio file
             IFormFileCollection files = req.Form.Files;
@@ -61,6 +63,7 @@ namespace SoundButtons
             log.LogInformation("{videoId}: {start}, {end}", videoId, start, end);
             if (files.Count > 0)
             {
+                // 有音檔，直接寫到暫存路徑使用
                 IFormFile file = files[0];
                 // Get file info
                 fileExtension = Path.GetExtension(file.FileName) ?? "";
@@ -75,9 +78,9 @@ namespace SoundButtons
             }
             else if (!string.IsNullOrEmpty(videoId) && end - start > 0)
             {
-                //var ytdl = new YoutubeDL();
                 log.LogInformation("TempDir: {tempDir}", tempDir);
 
+                // 非同步更新FFmpeg
                 FFmpeg.SetExecutablesPath(tempDir);
                 Task task = FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official, FFmpeg.ExecutablesPath);
                 log.LogInformation("FFmpeg Path: {ffmpegPath}", FFmpeg.ExecutablesPath);
@@ -85,14 +88,17 @@ namespace SoundButtons
                 string youtubeDLPath = Path.Combine(tempDir, "youtube-dl.exe");
                 try
                 {
+                    // 同步下載youtube-dl.exe (youtube-dlc)
                     var wc = new System.Net.WebClient();
                     wc.DownloadFile(new Uri(@"https://github.com/blackjack4494/yt-dlc/releases/latest/download/youtube-dlc.exe"), youtubeDLPath);
                     log.LogInformation("Download youtube-dl.exe at {ytdlPath}", youtubeDLPath);
 
+                    // 下載音訊來源
                     log.LogInformation("Start to download audio from {videoId}", videoId);
 
                     OptionSet optionSet = new OptionSet
                     {
+                        // 最佳音質
                         Format = "140/m4a/bestaudio",
                         NoCheckCertificate = true,
                         Output = tempPath.Replace(".tmp", "_org.%(ext)s")
@@ -105,6 +111,7 @@ namespace SoundButtons
                     {
                         log.LogInformation(e.Data);
 
+                        // 由console輸出中比對出檔名
                         Match match = new Regex("Destination: (.*)", RegexOptions.Compiled).Match(e.Data);
                         if (match.Success)
                         {
@@ -128,6 +135,7 @@ namespace SoundButtons
                             log.LogInformation("Get extension: {fileExtension}", fileExtension);
                             tempPath = Path.ChangeExtension(tempPath, fileExtension);
 
+                            // 剪切音檔
                             task.Wait();
                             log.LogInformation("Start to cut audio");
                             IConversion conversion = await FFmpeg.Conversions.FromSnippet.Split(source, tempPath, TimeSpan.FromSeconds(start), TimeSpan.FromSeconds(end - start));
