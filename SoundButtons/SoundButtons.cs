@@ -216,13 +216,14 @@ namespace SoundButtons
             CloudBlockBlob newjsonBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/UploadJson/{DateTime.Now:yyyy-MM-dd-HH-mm}.json");
 
             newjsonBlob.Properties.ContentType = "application/json";
+
             // Generate new json file
             var result = JsonSerializer.SerializeToUtf8Bytes<JsonRoot>(
                 UpdateJson(root,
-                    directory,
-                    filename,
-                    req.Form,
-                    sasContainerToken),
+                           directory,
+                           filename,
+                           req.Form,
+                           sasContainerToken),
                 new JsonSerializerOptions
                 {
                     Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
@@ -261,11 +262,18 @@ namespace SoundButtons
             string videoId = form.GetFirstValue("videoId") ?? "";
             if (videoId.StartsWith("https://youtu.be/"))
             {
-                videoId = Regex.Match(videoId, "^.*/([^?]*).*$").Value;
+                videoId = Regex.Match(videoId, "^.*/([^?]*).*$").Groups[1].Value;
             }
             else if (videoId.StartsWith("https://www.youtube.com/watch"))
             {
-                videoId = Regex.Match(videoId, "^.*[?&]v=([^&]*).*$").Value;
+                videoId = Regex.Match(videoId, "^.*[?&]v=([^&]*).*$").Groups[1].Value;
+            }
+            else if (videoId.StartsWith("http"))
+            {
+                // Discard unknown links
+                videoId = "";
+                start = 0;
+                end = 0;
             }
 
             // Get ButtonGrop if exists, or new one
