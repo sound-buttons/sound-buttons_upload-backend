@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using System.Web.Http;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Storage.Blob;
@@ -37,6 +38,7 @@ namespace SoundButtons
             string filename, fileExtension = "";
             if (!req.Form.ContainsKey("nameZH"))
                 return (ActionResult)new BadRequestResult();
+            string name = req.Form.GetFirstValue("nameZH");
 
             filename = req.Form.GetFirstValue("nameZH") ?? Guid.NewGuid().ToString("n");
             filename = filename.Replace("\"", "").Replace(" ", "_");
@@ -48,9 +50,30 @@ namespace SoundButtons
             log.LogInformation($"Directory: {directory}");
 
             // 取得youtube影片id和秒數
-            string videoId = req.Form.GetFirstValue("videoId");
             int.TryParse(req.Form.GetFirstValue("start"), out int start);
             int.TryParse(req.Form.GetFirstValue("end"), out int end);
+            var source = new Source
+            {
+                videoId = req.Form.GetFirstValue("videoId"),
+                start = start,
+                end = end
+            };
+            if (source.videoId.StartsWith("https://youtu.be/"))
+            {
+                source.videoId = Regex.Match(source.videoId, "^.*/([^?]*).*$").Groups[1].Value;
+            }
+            else if (source.videoId.StartsWith("https://www.youtube.com/watch"))
+            {
+                source.videoId = Regex.Match(source.videoId, "^.*[?&]v=([^&]*).*$").Groups[1].Value;
+            }
+            else if (source.videoId.StartsWith("http"))
+            {
+                // Discard unknown links
+                source.videoId = "";
+                source.start = 0;
+                source.end = 0;
+            }
+
 
 #if DEBUG
             string tempDir = Path.GetTempPath();
@@ -63,7 +86,7 @@ namespace SoundButtons
             // Get audio file
             IFormFileCollection files = req.Form.Files;
             log.LogInformation("Files Count: {fileCount}", files.Count);
-            log.LogInformation("{videoId}: {start}, {end}", videoId, start, end);
+            log.LogInformation("{videoId}: {start}, {end}", source.videoId, source.start, source.end);
             if (files.Count > 0)
             {
                 // 有音檔，直接寫到暫存路徑使用
@@ -79,7 +102,7 @@ namespace SoundButtons
                     log.LogInformation("Write file from upload.");
                 }
             }
-            else if (!string.IsNullOrEmpty(videoId) && end - start > 0 && end - start <= 60)
+            else if (!string.IsNullOrEmpty(source.videoId) && end - start > 0 && end - start <= 60)
             {
                 log.LogInformation("TempDir: {tempDir}", tempDir);
 
@@ -97,7 +120,7 @@ namespace SoundButtons
                     log.LogInformation("Download youtube-dl.exe at {ytdlPath}", youtubeDLPath);
 
                     // 下載音訊來源
-                    log.LogInformation("Start to download audio from {videoId}", videoId);
+                    log.LogInformation("Start to download audio from {videoId}", source.videoId);
 
                     OptionSet optionSet = new OptionSet
                     {
@@ -107,7 +130,7 @@ namespace SoundButtons
                         Output = tempPath.Replace(".tmp", "_org.%(ext)s")
                     };
 
-                    string source = string.Empty;
+                    string sourcePath = string.Empty;
                     YoutubeDLProcess youtubeDLProcess = new YoutubeDLProcess(youtubeDLPath);
 
                     youtubeDLProcess.OutputReceived += (object sender, System.Diagnostics.DataReceivedEventArgs e) =>
@@ -118,44 +141,44 @@ namespace SoundButtons
                         Match match = new Regex("Destination: (.*)", RegexOptions.Compiled).Match(e.Data);
                         if (match.Success)
                         {
-                            source = match.Groups[1].ToString().Trim();
+                            sourcePath = match.Groups[1].ToString().Trim();
                         }
                     };
                     youtubeDLProcess.ErrorReceived += (object sender, System.Diagnostics.DataReceivedEventArgs e)
                         => log.LogError(e.Data);
 
                     int res = await youtubeDLProcess.RunAsync(
-                        new string[] { @$"https://youtu.be/{videoId}" },
+                        new string[] { @$"https://youtu.be/{source.videoId}" },
                         optionSet,
                         new System.Threading.CancellationToken());
 
-                    if (res == 0 && !string.IsNullOrEmpty(source))
+                    if (res == 0 && !string.IsNullOrEmpty(sourcePath))
                     {
                         try
                         {
-                            log.LogInformation("Downloaded audio: {sourcePath}", source);
-                            fileExtension = Path.GetExtension(source);
+                            log.LogInformation("Downloaded audio: {sourcePath}", sourcePath);
+                            fileExtension = Path.GetExtension(sourcePath);
                             log.LogInformation("Get extension: {fileExtension}", fileExtension);
                             tempPath = Path.ChangeExtension(tempPath, fileExtension);
 
                             // 剪切音檔
                             task.Wait();
                             log.LogInformation("Start to cut audio");
-                            IConversion conversion = await FFmpeg.Conversions.FromSnippet.Split(source, tempPath, TimeSpan.FromSeconds(start), TimeSpan.FromSeconds(end - start));
+                            IConversion conversion = await FFmpeg.Conversions.FromSnippet.Split(sourcePath, tempPath, TimeSpan.FromSeconds(source.start), TimeSpan.FromSeconds(source.end - source.start));
                             IConversionResult convRes = await conversion.Start();
                             log.LogInformation("Cut audio Finish: {path}", tempPath);
                             log.LogInformation("Cut audio Finish in {duration} seconds.", convRes.Duration.TotalSeconds);
 
-                            origFileName = $"{videoId}_{start}_{end}{fileExtension}";
+                            origFileName = $"{source.videoId}_{source.start}_{source.end}{fileExtension}";
                         } finally
                         {
-                            File.Delete(source);
+                            File.Delete(sourcePath);
                         }
                     }
-                    else { return (ActionResult)new BadRequestResult(); }
+                    else { return (ActionResult)new BadRequestObjectResult(new string[] { name }); }
                 } finally { File.Delete(youtubeDLPath); }
             }
-            else { return (ActionResult)new BadRequestResult(); }
+            else { return (ActionResult)new BadRequestObjectResult(new string[] { name }); }
 
             #endregion
 
@@ -223,6 +246,7 @@ namespace SoundButtons
                            directory,
                            filename,
                            req.Form,
+                           source,
                            sasContainerToken),
                 new JsonSerializerOptions
                 {
@@ -237,7 +261,7 @@ namespace SoundButtons
             Task.WaitAll(tasks.ToArray());
             #endregion
 
-            return (ActionResult)new OkObjectResult(new { name = filename });
+            return (ActionResult)new OkObjectResult(new string[] { name });
         }
 
         private static string GetFirstValue(this IFormCollection form, string name)
@@ -250,31 +274,12 @@ namespace SoundButtons
             return result;
         }
 
-        private static JsonRoot UpdateJson(JsonRoot root, string directory, string filename, IFormCollection form, string SASToken)
+        private static JsonRoot UpdateJson(JsonRoot root, string directory, string filename, IFormCollection form, Source source, string SASToken)
         {
             // Variables prepare
             string baseRoute = $"https://jim60105.blob.core.windows.net/sound-buttons/{directory}/";
 
             string group = form.GetFirstValue("group") ?? "未分類";
-            _ = int.TryParse(form.GetFirstValue("start"), out int start);
-            _ = double.TryParse(form.GetFirstValue("end"), out double end);
-            end = Math.Ceiling(end);
-            string videoId = form.GetFirstValue("videoId") ?? "";
-            if (videoId.StartsWith("https://youtu.be/"))
-            {
-                videoId = Regex.Match(videoId, "^.*/([^?]*).*$").Groups[1].Value;
-            }
-            else if (videoId.StartsWith("https://www.youtube.com/watch"))
-            {
-                videoId = Regex.Match(videoId, "^.*[?&]v=([^&]*).*$").Groups[1].Value;
-            }
-            else if (videoId.StartsWith("http"))
-            {
-                // Discard unknown links
-                videoId = "";
-                start = 0;
-                end = 0;
-            }
 
             // Get ButtonGrop if exists, or new one
             ButtonGroup buttonGroup = null;
@@ -304,6 +309,9 @@ namespace SoundButtons
                 root.buttonGroups.Add(buttonGroup);
             }
 
+            // Prevent script injection
+            source.videoId = System.Web.HttpUtility.UrlEncode(source.videoId);
+
             // Add button
             buttonGroup.buttons.Add(new Button(
                 filename,
@@ -311,11 +319,7 @@ namespace SoundButtons
                     form.GetFirstValue("nameZH") ?? "",
                     form.GetFirstValue("nameJP") ?? ""
                 ),
-                new Source(
-                    System.Web.HttpUtility.UrlEncode(videoId),  // Prevent script injection
-                    start,
-                    (int)end
-                ),
+                source,
                 SASToken
             ));
 
