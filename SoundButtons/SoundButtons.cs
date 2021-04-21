@@ -42,7 +42,6 @@ namespace SoundButtons
 
             filename = req.Form.GetFirstValue("nameZH") ?? Guid.NewGuid().ToString("n");
             filename = filename.Replace("\"", "").Replace(" ", "_");
-            string origFileName = filename;
             log.LogInformation("FileName: {filename}", filename);
 
             // 取得角色
@@ -95,7 +94,6 @@ namespace SoundButtons
                 fileExtension = Path.GetExtension(file.FileName) ?? "";
                 tempPath = Path.ChangeExtension(tempPath, fileExtension);
                 log.LogInformation($"Get extension: {fileExtension}");
-                origFileName = file.FileName;
                 using (var fs = new FileStream(tempPath, FileMode.OpenOrCreate, FileAccess.Write))
                 {
                     file.CopyTo(fs);
@@ -111,7 +109,7 @@ namespace SoundButtons
                 Task task = FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official, FFmpeg.ExecutablesPath);
                 log.LogInformation("FFmpeg Path: {ffmpegPath}", FFmpeg.ExecutablesPath);
 
-                string youtubeDLPath = Path.Combine(tempDir, "youtube-dl.exe");
+                string youtubeDLPath = Path.Combine(tempDir, DateTime.Now.Ticks.ToString() + "youtube-dl.exe");
                 try
                 {
                     // 同步下載youtube-dl.exe (youtube-dlc)
@@ -168,8 +166,6 @@ namespace SoundButtons
                             IConversionResult convRes = await conversion.Start();
                             log.LogInformation("Cut audio Finish: {path}", tempPath);
                             log.LogInformation("Cut audio Finish in {duration} seconds.", convRes.Duration.TotalSeconds);
-
-                            origFileName = $"{source.videoId}_{source.start}_{source.end}{fileExtension}";
                         } finally
                         {
                             File.Delete(sourcePath);
@@ -198,7 +194,6 @@ namespace SoundButtons
 
             // Set info on the blob storage block
             cloudBlockBlob.Properties.ContentType = "audio/basic";
-            cloudBlockBlob.Metadata.Add("origName", origFileName);
 
             string ip = req.Headers.FirstOrDefault(x => x.Key == "X-Forwarded-For").Value.FirstOrDefault();
             if (null != ip)
