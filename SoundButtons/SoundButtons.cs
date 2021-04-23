@@ -73,6 +73,8 @@ namespace SoundButtons
                 source.end = 0;
             }
 
+            // toast ID用於回傳，讓前端能取消顯示toast
+            string toastId = req.Form.GetFirstValue("toastId") ?? "-1";
 
 #if DEBUG
             string tempDir = Path.GetTempPath();
@@ -171,10 +173,10 @@ namespace SoundButtons
                             File.Delete(sourcePath);
                         }
                     }
-                    else { return (ActionResult)new BadRequestObjectResult(new string[] { name }); }
+                    else { return (ActionResult)new BadRequestObjectResult(new string[] { name, toastId }); }
                 } finally { File.Delete(youtubeDLPath); }
             }
-            else { return (ActionResult)new BadRequestObjectResult(new string[] { name }); }
+            else { return (ActionResult)new BadRequestObjectResult(new string[] { name, toastId }); }
 
             #endregion
 
@@ -256,7 +258,7 @@ namespace SoundButtons
             Task.WaitAll(tasks.ToArray());
             #endregion
 
-            return (ActionResult)new OkObjectResult(new string[] { name });
+            return (ActionResult)new OkObjectResult(new string[] { name, toastId });
         }
 
         private static string GetFirstValue(this IFormCollection form, string name)
