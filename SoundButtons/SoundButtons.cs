@@ -40,8 +40,10 @@ namespace SoundButtons
                 return (ActionResult)new BadRequestResult();
             string name = req.Form.GetFirstValue("nameZH");
 
-            filename = req.Form.GetFirstValue("nameZH") ?? Guid.NewGuid().ToString("n");
-            filename = filename.Replace("\"", "").Replace(" ", "_");
+            filename = req.Form.GetFirstValue("nameZH") ?? "";
+            Regex.Replace(filename, @"[^0-9a-zA-Z]+", "");
+            if (filename.Length == 0)
+                filename = Guid.NewGuid().ToString("n");
             log.LogInformation("FileName: {filename}", filename);
 
             // ¨ú±o¨¤¦â
