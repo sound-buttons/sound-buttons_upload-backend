@@ -7,7 +7,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using System.Web.Http;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Storage.Blob;
@@ -41,7 +40,7 @@ namespace SoundButtons
             string name = req.Form.GetFirstValue("nameZH");
 
             filename = req.Form.GetFirstValue("nameZH") ?? "";
-            Regex.Replace(filename, @"[^0-9a-zA-Z]+", "");
+            Regex.Replace(filename, @"[^0-9a-zA-Z\p{L}]+", ""); // 比對通過英數、中日文字等(多位元組字元)
             if (filename.Length == 0)
                 filename = Guid.NewGuid().ToString("n");
             log.LogInformation("FileName: {filename}", filename);
@@ -55,7 +54,7 @@ namespace SoundButtons
             int.TryParse(req.Form.GetFirstValue("end"), out int end);
             var source = new Source
             {
-                videoId = req.Form.GetFirstValue("videoId"),
+                videoId = req.Form.GetFirstValue("videoId") ?? "",
                 start = start,
                 end = end
             };
