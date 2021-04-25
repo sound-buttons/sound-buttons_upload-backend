@@ -1,12 +1,16 @@
 {
   "dependencies": {
-    "appInsights1": {
-      "type": "appInsights.sdk"
-    },
     "storage1": {
-      "resourceId": "/subscriptions/[parameters('subscriptionId')]/resourceGroups/[parameters('resourceGroupName')]/providers/Microsoft.Storage/storageAccounts/jim60105",
+      "resourceId": "/subscriptions/[parameters('subscriptionId')]/resourceGroups/[parameters('resourceGroupName')]/providers/Microsoft.Storage/storageAccounts/soundbuttons",
       "type": "storage.azure",
-      "connectionId": "AzureWebJobsStorage"
+      "connectionId": "AzureStorage",
+      "secretStore": "LocalSecretsFile"
+    },
+    "appInsights1": {
+      "resourceId": null,
+      "type": "appInsights.sdk",
+      "connectionId": null,
+      "secretStore": null
     }
   }
 }

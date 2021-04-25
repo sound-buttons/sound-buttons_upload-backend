@@ -25,7 +25,7 @@ namespace SoundButtons
         [FunctionName("sound-buttons")]
         public static async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
                                                     ILogger log,
-                                                    [Blob("sound-buttons"), StorageAccount("AzureWebJobsStorage")] CloudBlobContainer cloudBlobContainer)
+                                                    [Blob("sound-buttons"), StorageAccount("AzureStorage")] CloudBlobContainer cloudBlobContainer)
         {
             // ≈Á√“ContentType¨∞multipart/form-data
             string contentType = req.ContentType;

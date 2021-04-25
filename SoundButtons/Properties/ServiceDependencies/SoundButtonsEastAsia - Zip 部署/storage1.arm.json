@@ -4,7 +4,7 @@
   "parameters": {
     "resourceGroupName": {
       "type": "string",
-      "defaultValue": "cloud-shell-storage-southeastasia",
+      "defaultValue": "soundbuttons",
       "metadata": {
         "_parameterType": "resourceGroup",
         "description": "資源的資源群組名稱。建議您將資源放在相同的資源群組下，以改進追蹤。"
@@ -12,7 +12,7 @@
     },
     "resourceGroupLocation": {
       "type": "string",
-      "defaultValue": "southeastasia",
+      "defaultValue": "eastasia",
       "metadata": {
         "_parameterType": "location",
         "description": "資源群組的位置。資源群組的位置可能與資源不同。"
@@ -36,7 +36,7 @@
     },
     {
       "type": "Microsoft.Resources/deployments",
-      "name": "[concat(parameters('resourceGroupName'), 'Deployment', uniqueString(concat('SoundButtons', subscription().subscriptionId)))]",
+      "name": "[concat(parameters('resourceGroupName'), 'Deployment', uniqueString(concat('soundbuttons', subscription().subscriptionId)))]",
       "resourceGroup": "[parameters('resourceGroupName')]",
       "apiVersion": "2019-10-01",
       "dependsOn": [
@@ -49,12 +49,15 @@
           "contentVersion": "1.0.0.0",
           "resources": [
             {
-              "name": "SoundButtons",
-              "type": "microsoft.insights/components",
+              "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+              },
+              "kind": "StorageV2",
+              "name": "soundbuttons",
+              "type": "Microsoft.Storage/storageAccounts",
               "location": "[parameters('resourceLocation')]",
-              "kind": "web",
-              "properties": {},
-              "apiVersion": "2015-05-01"
+              "apiVersion": "2017-10-01"
             }
           ]
         }
@@ -62,6 +65,6 @@
     }
   ],
   "metadata": {
-    "_dependencyType": "appInsights.azure"
+    "_dependencyType": "storage.azure"
   }
 }
