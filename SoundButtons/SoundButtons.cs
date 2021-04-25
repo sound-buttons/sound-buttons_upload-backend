@@ -275,7 +275,7 @@ namespace SoundButtons
         private static JsonRoot UpdateJson(JsonRoot root, string directory, string filename, IFormCollection form, Source source, string SASToken)
         {
             // Variables prepare
-            string baseRoute = $"https://jim60105.blob.core.windows.net/sound-buttons/{directory}/";
+            string baseRoute = $"https://soundbuttons.blob.core.windows.net/sound-buttons/{directory}/";
 
             string group = form.GetFirstValue("group") ?? "¥¼¤ÀÃþ";
 
