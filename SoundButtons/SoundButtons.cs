@@ -79,6 +79,7 @@ namespace SoundButtons
                     source.end = 0;
                 }
             }
+            log.LogInformation("{videoId}: {start}, {end}", source.videoId, source.start, source.end);
 
             // toast ID用於回傳，讓前端能取消顯示toast
             string toastId = req.Form.GetFirstValue("toastId") ?? "-1";
@@ -116,9 +117,9 @@ namespace SoundButtons
             #region 由上傳取得音檔
             IFormFileCollection files = req.Form.Files;
             log.LogInformation("Files Count: {fileCount}", files.Count);
-            log.LogInformation("{videoId}: {start}, {end}", source.videoId, source.start, source.end);
             if (files.Count > 0)
             {
+                log.LogInformation("Get file from form post.");
                 // 有音檔，直接寫到暫存路徑使用
                 IFormFile file = files[0];
                 // Get file info
@@ -145,12 +146,13 @@ namespace SoundButtons
             // 設定非同步更新FFmpeg的task
             FFmpeg.SetExecutablesPath(tempDir);
             Task task = FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official, FFmpeg.ExecutablesPath);
-            log.LogInformation("FFmpeg Path: {ffmpegPath}", FFmpeg.ExecutablesPath);
+            //log.LogInformation("FFmpeg Path: {ffmpegPath}", FFmpeg.ExecutablesPath);
 
             #region 由storage檢查音檔
             CloudBlockBlob sourceBlob = cloudBlobContainer.GetBlockBlobReference($"AudioSource/{source.videoId}");
             if (sourceBlob.Exists() && sourceBlob.Metadata.TryGetValue("Extension", out string ext))
             {
+                log.LogInformation("Start to download audio source from blob storage {name}", sourceBlob.Name);
                 string sourcePath = Path.Combine(tempDir, DateTime.Now.Ticks.ToString());
                 sourcePath = Path.ChangeExtension(sourcePath, ext);
                 try
@@ -180,7 +182,7 @@ namespace SoundButtons
                 log.LogInformation("Download youtube-dl.exe at {ytdlPath}", youtubeDLPath);
 
                 // 下載音訊來源
-                log.LogInformation("Start to download audio from {videoId}", source.videoId);
+                log.LogInformation("Start to download audio source from youtube {videoId}", source.videoId);
 
                 OptionSet optionSet = new OptionSet
                 {
@@ -263,6 +265,7 @@ namespace SoundButtons
                 cloudBlockBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/{filename + fileExtension}");
             }
             log.LogInformation($"Filename: {filename + fileExtension}");
+            log.LogInformation("Start to upload audio to blob storage {name}", cloudBlobContainer.Name);
 
             // Get a new SAS token for the file
             string sasContainerToken = cloudBlockBlob.GetSharedAccessSignature(null, "永讀");
@@ -292,6 +295,7 @@ namespace SoundButtons
         {
             // Get last json file
             CloudBlockBlob jsonBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/{directory}.json");
+            log.LogInformation("Read Json file {name}", jsonBlob.Name);
 
             JsonRoot root;
             // Read last json file
@@ -326,6 +330,8 @@ namespace SoundButtons
                     WriteIndented = true
                 });
 
+            log.LogInformation("Write Json {name}", jsonBlob.Name);
+            log.LogInformation("Write Json backup {name}", newjsonBlob.Name);
             // Write new json file
             Task.WaitAll(newjsonBlob.UploadFromByteArrayAsync(result, 0, result.Length),
                          jsonBlob.UploadFromByteArrayAsync(result, 0, result.Length));
