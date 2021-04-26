@@ -20,17 +20,17 @@ using YoutubeDLSharp.Options;
 
 namespace SoundButtons
 {
-    public static class SoundButtons
+    public class SoundButtons
     {
-        static ILogger log;
-        static CloudBlobContainer cloudBlobContainer;
+        ILogger log;
+        CloudBlobContainer cloudBlobContainer;
         [FunctionName("sound-buttons")]
-        public static async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
-                                                    ILogger log,
-                                                    [Blob("sound-buttons"), StorageAccount("AzureStorage")] CloudBlobContainer cloudBlobContainer)
+        public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
+                                             ILogger log,
+                                             [Blob("sound-buttons"), StorageAccount("AzureStorage")] CloudBlobContainer cloudBlobContainer)
         {
-            SoundButtons.log = log;
-            SoundButtons.cloudBlobContainer = cloudBlobContainer;
+            this.log = log;
+            this.cloudBlobContainer = cloudBlobContainer;
 
             // 驗證ContentType為multipart/form-data
             string contentType = req.ContentType;
@@ -62,20 +62,22 @@ namespace SoundButtons
                 end = end
             };
 
-            switch (true)
+            if (source.videoId.StartsWith("http"))
             {
-                case true when source.videoId.StartsWith("https://youtu.be/"):
-                    source.videoId = Regex.Match(source.videoId, "^.*/([^?]*).*$").Groups[1].Value;
-                    break;
-                case true when source.videoId.StartsWith("https://www.youtube.com/watch"):
-                    source.videoId = Regex.Match(source.videoId, "^.*[?&]v=([^&]*).*$").Groups[1].Value;
-                    break;
-                default:
+                // Regex for strip youtube video id from url c# and returl default thumbnail
+                // https://gist.github.com/Flatlineato/f4cc3f3937272646d4b0
+                source.videoId = Regex.Match(
+                    source.videoId,
+                    "https?:\\/\\/(?:[0-9A-Z-]+\\.)?(?:youtu\\.be\\/|youtube(?:-nocookie)?\\.com\\S*[^\\w\\s-])([\\w-]{11})(?=[^\\w-]|$)(?![?=&+%\\w.-]*(?:['\"][^<>]*>|<\\/a>))[?=&+%\\w.-]*",
+                    RegexOptions.IgnoreCase).Groups[1].Value;
+
+                if (string.IsNullOrEmpty(source.videoId))
+                {
                     // Discard unknown source
                     source.videoId = "";
                     source.start = 0;
                     source.end = 0;
-                    break;
+                }
             }
 
             // toast ID用於回傳，讓前端能取消顯示toast
@@ -102,97 +104,7 @@ namespace SoundButtons
             return (ActionResult)new OkObjectResult(new string[] { name, toastId });
         }
 
-        private static async Task ProcessJsonFile(HttpRequest req, Source source, string directory, string filename, string fileExtension, string sasContainerToken)
-        {
-            // Get last json file
-            CloudBlockBlob jsonBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/{directory}.json");
-
-            JsonRoot root;
-            // Read last json file
-            using (Stream input = jsonBlob.OpenRead())
-            {
-                root = await JsonSerializer.DeserializeAsync<JsonRoot>(input, new JsonSerializerOptions
-                {
-                    ReadCommentHandling = JsonCommentHandling.Skip,
-                    AllowTrailingCommas = true,
-                    // For Unicode and '&' characters
-                    Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-                });
-            }
-
-            // Get new json file block
-            CloudBlockBlob newjsonBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/UploadJson/{DateTime.Now:yyyy-MM-dd-HH-mm}.json");
-
-            newjsonBlob.Properties.ContentType = "application/json";
-
-            // Generate new json file
-            JsonRoot json = UpdateJson(root,
-                                       directory,
-                                       filename + fileExtension,
-                                       req.Form,
-                                       source,
-                                       sasContainerToken);
-            byte[] result = JsonSerializer.SerializeToUtf8Bytes<JsonRoot>(
-                json,
-                new JsonSerializerOptions
-                {
-                    Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-                    WriteIndented = true
-                });
-
-            // Write new json file
-            Task.WaitAll(newjsonBlob.UploadFromByteArrayAsync(result, 0, result.Length),
-                         jsonBlob.UploadFromByteArrayAsync(result, 0, result.Length));
-        }
-
-        private static async Task<string> UploadAudioToStorageAsync(HttpRequest req, string filename, string directory, string tempPath)
-        {
-            string fileExtension = Path.GetExtension(tempPath);
-
-            // Get a new file name on blob storage
-            CloudBlockBlob cloudBlockBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/{filename + fileExtension}");
-            if (cloudBlockBlob.Exists())
-            {
-                filename += $"_{DateTime.Now.Ticks}";
-                cloudBlockBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/{filename + fileExtension}");
-            }
-            log.LogInformation($"Filename: {filename + fileExtension}");
-
-            // Get a new SAS token for the file
-            string sasContainerToken = cloudBlockBlob.GetSharedAccessSignature(null, "永讀");
-
-            // Set info on the blob storage block
-            cloudBlockBlob.Properties.ContentType = "audio/basic";
-
-            string ip = req.Headers.FirstOrDefault(x => x.Key == "X-Forwarded-For").Value.FirstOrDefault();
-            if (null != ip)
-            {
-                cloudBlockBlob.Metadata.Add("sourceIp", ip);
-            }
-
-            try
-            {
-                // Write audio file 
-                using (var fs = new FileStream(tempPath, FileMode.Open))
-                {
-                    await cloudBlockBlob.UploadFromStreamAsync(fs);
-                }
-                log.LogInformation("Upload audio to azure finish.");
-            } finally { File.Delete(tempPath); }
-            return sasContainerToken;
-        }
-
-        private static string GetFirstValue(this IFormCollection form, string name)
-        {
-            string result = null;
-            if (form.TryGetValue(name, out var sv) && sv.Count > 0 && !string.IsNullOrEmpty(sv[0]))
-            {
-                result = sv[0];
-            }
-            return result;
-        }
-
-        private static async Task<string> ProcessAudioAsync(HttpRequest req, Source source, CloudBlobContainer cloudBlobContainer)
+        private async Task<string> ProcessAudioAsync(HttpRequest req, Source source, CloudBlobContainer cloudBlobContainer)
         {
 #if DEBUG
             string tempDir = Path.GetTempPath();
@@ -241,16 +153,16 @@ namespace SoundButtons
             {
                 string sourcePath = Path.Combine(tempDir, DateTime.Now.Ticks.ToString());
                 sourcePath = Path.ChangeExtension(sourcePath, ext);
-                Task.WaitAll(task, Task.Run(() =>
+                try
                 {
                     using (var fs = new FileStream(sourcePath, FileMode.OpenOrCreate, FileAccess.Write))
                     {
-                        return sourceBlob.DownloadToStreamAsync(fs);
+                        Task.WaitAll(task, Task.Run(() =>
+                        {
+                            return sourceBlob.DownloadToStreamAsync(fs);
+                        }));
                     }
-                }));
 
-                try
-                {
                     tempPath = await CutAudioAsync(sourcePath, tempPath, source);
                 } finally { File.Delete(sourcePath); }
 
@@ -314,7 +226,7 @@ namespace SoundButtons
             #endregion
         }
 
-        private static async Task<string> CutAudioAsync(string sourcePath, string tempPath, Source source)
+        private async Task<string> CutAudioAsync(string sourcePath, string tempPath, Source source)
         {
             log.LogInformation("Downloaded audio: {sourcePath}", sourcePath);
             var fileExtension = Path.GetExtension(sourcePath);
@@ -323,14 +235,103 @@ namespace SoundButtons
 
             // 剪切音檔
             log.LogInformation("Start to cut audio");
-            IConversion conversion = await FFmpeg.Conversions.FromSnippet.Split(sourcePath, tempPath, TimeSpan.FromSeconds(source.start), TimeSpan.FromSeconds(source.end - source.start));
+            List<IStream> list = FFmpeg.GetMediaInfo(sourcePath)
+                                       .GetAwaiter()
+                                       .GetResult()
+                                       .AudioStreams
+                                       .Select(audioStream => audioStream.Split(startTime: TimeSpan.FromSeconds(source.start),
+                                                                                duration: TimeSpan.FromSeconds(source.end - source.start))
+                                               as IStream)
+                                       .ToList();
+            IConversion conversion = new Conversion().AddStream(list)
+                                                     .SetOutput(tempPath);
             IConversionResult convRes = await conversion.Start();
             log.LogInformation("Cut audio Finish: {path}", tempPath);
             log.LogInformation("Cut audio Finish in {duration} seconds.", convRes.Duration.TotalSeconds);
             return tempPath;
         }
 
-        private static JsonRoot UpdateJson(JsonRoot root, string directory, string filename, IFormCollection form, Source source, string SASToken)
+        private async Task<string> UploadAudioToStorageAsync(HttpRequest req, string filename, string directory, string tempPath)
+        {
+            string fileExtension = Path.GetExtension(tempPath);
+
+            // Get a new file name on blob storage
+            CloudBlockBlob cloudBlockBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/{filename + fileExtension}");
+            if (cloudBlockBlob.Exists())
+            {
+                filename += $"_{DateTime.Now.Ticks}";
+                cloudBlockBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/{filename + fileExtension}");
+            }
+            log.LogInformation($"Filename: {filename + fileExtension}");
+
+            // Get a new SAS token for the file
+            string sasContainerToken = cloudBlockBlob.GetSharedAccessSignature(null, "永讀");
+
+            // Set info on the blob storage block
+            cloudBlockBlob.Properties.ContentType = "audio/basic";
+
+            string ip = req.Headers.FirstOrDefault(x => x.Key == "X-Forwarded-For").Value.FirstOrDefault();
+            if (null != ip)
+            {
+                cloudBlockBlob.Metadata.Add("sourceIp", ip);
+            }
+
+            try
+            {
+                // Write audio file 
+                using (var fs = new FileStream(tempPath, FileMode.Open))
+                {
+                    await cloudBlockBlob.UploadFromStreamAsync(fs);
+                }
+                log.LogInformation("Upload audio to azure finish.");
+            } finally { File.Delete(tempPath); }
+            return sasContainerToken;
+        }
+
+        private async Task ProcessJsonFile(HttpRequest req, Source source, string directory, string filename, string fileExtension, string sasContainerToken)
+        {
+            // Get last json file
+            CloudBlockBlob jsonBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/{directory}.json");
+
+            JsonRoot root;
+            // Read last json file
+            using (Stream input = jsonBlob.OpenRead())
+            {
+                root = await JsonSerializer.DeserializeAsync<JsonRoot>(input, new JsonSerializerOptions
+                {
+                    ReadCommentHandling = JsonCommentHandling.Skip,
+                    AllowTrailingCommas = true,
+                    // For Unicode and '&' characters
+                    Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+                });
+            }
+
+            // Get new json file block
+            CloudBlockBlob newjsonBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/UploadJson/{DateTime.Now:yyyy-MM-dd-HH-mm}.json");
+
+            newjsonBlob.Properties.ContentType = "application/json";
+
+            // Generate new json file
+            JsonRoot json = UpdateJson(root,
+                                       directory,
+                                       filename + fileExtension,
+                                       req.Form,
+                                       source,
+                                       sasContainerToken);
+            byte[] result = JsonSerializer.SerializeToUtf8Bytes<JsonRoot>(
+                json,
+                new JsonSerializerOptions
+                {
+                    Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+                    WriteIndented = true
+                });
+
+            // Write new json file
+            Task.WaitAll(newjsonBlob.UploadFromByteArrayAsync(result, 0, result.Length),
+                         jsonBlob.UploadFromByteArrayAsync(result, 0, result.Length));
+        }
+
+        private JsonRoot UpdateJson(JsonRoot root, string directory, string filename, IFormCollection form, Source source, string SASToken)
         {
             // Variables prepare
             string baseRoute = $"https://soundbuttons.blob.core.windows.net/sound-buttons/{directory}/";
@@ -481,6 +482,19 @@ namespace SoundButtons
         }
 #pragma warning restore IDE1006 // 命名樣式
         #endregion
+    }
+
+    static class Extension
+    {
+        internal static string GetFirstValue(this IFormCollection form, string name)
+        {
+            string result = null;
+            if (form.TryGetValue(name, out var sv))
+            {
+                result = sv.FirstOrDefault();
+            }
+            return result;
+        }
     }
 }
 
