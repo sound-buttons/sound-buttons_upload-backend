@@ -32,27 +32,27 @@ namespace SoundButtons
             this.log = log;
             this.cloudBlobContainer = cloudBlobContainer;
 
-            // ÅçÃÒContentType¬°multipart/form-data
+            // é©—è­‰ContentTypeç‚ºmultipart/form-data
             string contentType = req.ContentType;
             log.LogInformation($"Content-Type: {contentType}");
             if (!contentType.Contains("multipart/form-data;"))
                 return (ActionResult)new BadRequestResult();
 
-            // ¨ú±o¤¤¤å¦WºÙ°µ¬°ÀÉ¦W
+            // å–å¾—ä¸­æ–‡åç¨±åšç‚ºæª”å
             if (!req.Form.ContainsKey("nameZH"))
                 return (ActionResult)new BadRequestResult();
-            string name = req.Form.GetFirstValue("nameZH"); // ¥Î©ó¦^¶Ç
+            string name = req.Form.GetFirstValue("nameZH"); // ç”¨æ–¼å›å‚³
             string filename = name ?? "";
-            filename = Regex.Replace(filename, @"[^0-9a-zA-Z\p{L}]+", ""); // ¤ñ¹ï³q¹L­^¼Æ¡B¤¤¤é¤å¦rµ¥(¦h¦ì¤¸²Õ¦r¤¸)
+            filename = Regex.Replace(filename, @"[^0-9a-zA-Z\p{L}]+", ""); // æ¯”å°é€šéè‹±æ•¸ã€ä¸­æ—¥æ–‡å­—ç­‰(å¤šä½å…ƒçµ„å­—å…ƒ)
             if (filename.Length == 0)
                 filename = Guid.NewGuid().ToString("n");
             log.LogInformation("FileName: {filename}", filename);
 
-            // ¨ú±o¨¤¦â
+            // å–å¾—è§’è‰²
             string directory = req.Form.GetFirstValue("directory") ?? "test";
             log.LogInformation($"Directory: {directory}");
 
-            // ¨ú±oyoutube¼v¤ùid©M¬í¼Æ
+            // å–å¾—youtubeå½±ç‰‡idå’Œç§’æ•¸
             _ = int.TryParse(req.Form.GetFirstValue("start"), out int start);
             _ = int.TryParse(req.Form.GetFirstValue("end"), out int end);
             var source = new Source
@@ -81,7 +81,7 @@ namespace SoundButtons
             }
             log.LogInformation("{videoId}: {start}, {end}", source.videoId, source.start, source.end);
 
-            // toast ID¥Î©ó¦^¶Ç¡AÅı«eºİ¯à¨ú®øÅã¥Ütoast
+            // toast IDç”¨æ–¼å›å‚³ï¼Œè®“å‰ç«¯èƒ½å–æ¶ˆé¡¯ç¤ºtoast
             string toastId = req.Form.GetFirstValue("toastId") ?? "-1";
 
             string tempPath;
@@ -114,13 +114,13 @@ namespace SoundButtons
 #endif
             string tempPath = Path.Combine(tempDir, DateTime.Now.Ticks.ToString() + ".tmp");
 
-            #region ¥Ñ¤W¶Ç¨ú±o­µÀÉ
+            #region ç”±ä¸Šå‚³å–å¾—éŸ³æª”
             IFormFileCollection files = req.Form.Files;
             log.LogInformation("Files Count: {fileCount}", files.Count);
             if (files.Count > 0)
             {
                 log.LogInformation("Get file from form post.");
-                // ¦³­µÀÉ¡Aª½±µ¼g¨ì¼È¦s¸ô®|¨Ï¥Î
+                // æœ‰éŸ³æª”ï¼Œç›´æ¥å¯«åˆ°æš«å­˜è·¯å¾‘ä½¿ç”¨
                 IFormFile file = files[0];
                 // Get file info
                 var _fileExtension = Path.GetExtension(file.FileName) ?? "";
@@ -135,7 +135,7 @@ namespace SoundButtons
             }
             #endregion
 
-            // sourceÀË®Ö
+            // sourceæª¢æ ¸
             if (string.IsNullOrEmpty(source.videoId)
                 || source.end - source.start <= 0
                 || source.end - source.start > 60)
@@ -143,12 +143,12 @@ namespace SoundButtons
 
             log.LogInformation("TempDir: {tempDir}", tempDir);
 
-            // ³]©w«D¦P¨B§ó·sFFmpegªºtask
+            // è¨­å®šéåŒæ­¥æ›´æ–°FFmpegçš„task
             FFmpeg.SetExecutablesPath(tempDir);
             Task task = FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official, FFmpeg.ExecutablesPath);
             //log.LogInformation("FFmpeg Path: {ffmpegPath}", FFmpeg.ExecutablesPath);
 
-            #region ¥ÑstorageÀË¬d­µÀÉ
+            #region ç”±storageæª¢æŸ¥éŸ³æª”
             CloudBlockBlob sourceBlob = cloudBlobContainer.GetBlockBlobReference($"AudioSource/{source.videoId}");
             if (sourceBlob.Exists() && sourceBlob.Metadata.TryGetValue("Extension", out string ext))
             {
@@ -172,21 +172,21 @@ namespace SoundButtons
             }
             #endregion
 
-            #region ¥Ñyoutube¤U¸ü­µÀÉ
+            #region ç”±youtubeä¸‹è¼‰éŸ³æª”
             string youtubeDLPath = Path.Combine(tempDir, DateTime.Now.Ticks.ToString() + "youtube-dl.exe");
             try
             {
-                // ¦P¨B¤U¸üyoutube-dl.exe (youtube-dlc)
+                // åŒæ­¥ä¸‹è¼‰youtube-dl.exe (youtube-dlc)
                 var wc = new System.Net.WebClient();
                 wc.DownloadFile(new Uri(@"https://github.com/blackjack4494/yt-dlc/releases/latest/download/youtube-dlc.exe"), youtubeDLPath);
                 log.LogInformation("Download youtube-dl.exe at {ytdlPath}", youtubeDLPath);
 
-                // ¤U¸ü­µ°T¨Ó·½
+                // ä¸‹è¼‰éŸ³è¨Šä¾†æº
                 log.LogInformation("Start to download audio source from youtube {videoId}", source.videoId);
 
                 OptionSet optionSet = new OptionSet
                 {
-                    // ³Ì¨Î­µ½è
+                    // æœ€ä½³éŸ³è³ª
                     Format = "140/m4a/bestaudio",
                     NoCheckCertificate = true,
                     Output = tempPath.Replace(".tmp", "_org.%(ext)s")
@@ -199,7 +199,7 @@ namespace SoundButtons
                 {
                     log.LogInformation(e.Data);
 
-                    // ¥Ñconsole¿é¥X¤¤¤ñ¹ï¥XÀÉ¦W
+                    // ç”±consoleè¼¸å‡ºä¸­æ¯”å°å‡ºæª”å
                     Match match = new Regex("Destination: (.*)", RegexOptions.Compiled).Match(e.Data);
                     if (match.Success)
                     {
@@ -235,7 +235,7 @@ namespace SoundButtons
             log.LogInformation("Get extension: {fileExtension}", fileExtension);
             tempPath = Path.ChangeExtension(tempPath, fileExtension);
 
-            // °Å¤Á­µÀÉ
+            // å‰ªåˆ‡éŸ³æª”
             log.LogInformation("Start to cut audio");
             List<IStream> list = FFmpeg.GetMediaInfo(sourcePath)
                                        .GetAwaiter()
@@ -268,7 +268,7 @@ namespace SoundButtons
             log.LogInformation("Start to upload audio to blob storage {name}", cloudBlobContainer.Name);
 
             // Get a new SAS token for the file
-            string sasContainerToken = cloudBlockBlob.GetSharedAccessSignature(null, "¥ÃÅª");
+            string sasContainerToken = cloudBlockBlob.GetSharedAccessSignature(null, "æ°¸è®€");
 
             // Set info on the blob storage block
             cloudBlockBlob.Properties.ContentType = "audio/basic";
@@ -342,7 +342,7 @@ namespace SoundButtons
             // Variables prepare
             string baseRoute = $"https://soundbuttons.blob.core.windows.net/sound-buttons/{directory}/";
 
-            string group = form.GetFirstValue("group") ?? "¥¼¤ÀÃş";
+            string group = form.GetFirstValue("group") ?? "æœªåˆ†é¡";
 
             // Get ButtonGrop if exists, or new one
             ButtonGroup buttonGroup = null;
@@ -390,7 +390,7 @@ namespace SoundButtons
         }
 
         #region POCO
-#pragma warning disable IDE1006 // ©R¦W¼Ë¦¡
+#pragma warning disable IDE1006 // å‘½åæ¨£å¼
         public class Color
         {
             public string primary { get; set; }
@@ -486,7 +486,7 @@ namespace SoundButtons
 
             public JsonRoot() { }
         }
-#pragma warning restore IDE1006 // ©R¦W¼Ë¦¡
+#pragma warning restore IDE1006 // å‘½åæ¨£å¼
         #endregion
     }
 
