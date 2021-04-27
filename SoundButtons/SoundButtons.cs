@@ -376,12 +376,17 @@ namespace SoundButtons
             source.videoId = System.Web.HttpUtility.UrlEncode(source.videoId);
 
             // Add button
+
+            if (!float.TryParse(form.GetFirstValue("volume"), out float volume))
+            { volume = 1; }
+
             buttonGroup.buttons.Add(new Button(
                 filename,
                 new Text(
                     form.GetFirstValue("nameZH") ?? "",
                     form.GetFirstValue("nameJP") ?? ""
                 ),
+                volume,
                 source,
                 SASToken
             ));
@@ -449,15 +454,17 @@ namespace SoundButtons
             public string filename { get; set; }
             public object text { get; set; }
             public string baseRoute { get; set; }
+            public float volume { get; set; }
             public Source source { get; set; }
             public string SASToken { get; set; }
 
             public Button() { }
 
-            public Button(string filename, object text, Source source, string sASToken)
+            public Button(string filename, object text, float volume, Source source, string sASToken)
             {
                 this.filename = filename;
                 this.text = text;
+                this.volume = volume;
                 this.source = source;
                 SASToken = sASToken;
             }
