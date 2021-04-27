@@ -454,11 +454,20 @@ namespace SoundButtons
             public string filename { get; set; }
             public object text { get; set; }
             public string baseRoute { get; set; }
-            public float volume { get; set; }
+            private float _volume;
+            public float volume
+            {
+                get => _volume;
+                set => _volume = value == 0
+                                     ? 1
+                                     : value;
+            }
             public Source source { get; set; }
             public string SASToken { get; set; }
 
-            public Button() { }
+            public Button() {
+                this.volume = volume;
+            }
 
             public Button(string filename, object text, float volume, Source source, string sASToken)
             {
