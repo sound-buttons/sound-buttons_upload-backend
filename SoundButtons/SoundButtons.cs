@@ -150,11 +150,11 @@ namespace SoundButtons
 
             #region 由storage檢查音檔
             CloudBlockBlob sourceBlob = cloudBlobContainer.GetBlockBlobReference($"AudioSource/{source.videoId}");
-            if (sourceBlob.Exists() && sourceBlob.Metadata.TryGetValue("Extension", out string ext))
+            if (sourceBlob.Exists())
             {
                 log.LogInformation("Start to download audio source from blob storage {name}", sourceBlob.Name);
                 string sourcePath = Path.Combine(tempDir, DateTime.Now.Ticks.ToString());
-                sourcePath = Path.ChangeExtension(sourcePath, ext);
+                sourcePath = Path.ChangeExtension(sourcePath, "m4a");
                 try
                 {
                     using (var fs = new FileStream(sourcePath, FileMode.OpenOrCreate, FileAccess.Write))
@@ -465,7 +465,8 @@ namespace SoundButtons
             public Source source { get; set; }
             public string SASToken { get; set; }
 
-            public Button() {
+            public Button()
+            {
                 this.volume = volume;
             }
 
