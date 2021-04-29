@@ -176,21 +176,37 @@ namespace SoundButtons
             string youtubeDLPath = Path.Combine(tempDir, DateTime.Now.Ticks.ToString() + "youtube-dl.exe");
             try
             {
-                // 同步下載youtube-dl.exe (youtube-dlc)
-                var wc = new System.Net.WebClient();
-                wc.DownloadFile(new Uri(@"https://github.com/blackjack4494/yt-dlc/releases/latest/download/youtube-dlc.exe"), youtubeDLPath);
+                try
+                {
+                    // 同步下載youtube-dl.exe (youtube-dlc)
+                    var wc = new System.Net.WebClient();
+                    wc.DownloadFile(new Uri(@"https://github.com/blackjack4494/yt-dlc/releases/latest/download/youtube-dlc.exe"), youtubeDLPath);
+                }
+                catch (System.Net.WebException)
+                {
+                    // WebException fallback
+                    if (File.Exists("youtube-dlc.exe"))
+                        File.Copy("youtube-dlc.exe", youtubeDLPath, true);
+                }
                 log.LogInformation("Download youtube-dl.exe at {ytdlPath}", youtubeDLPath);
-
-                // 下載音訊來源
-                log.LogInformation("Start to download audio source from youtube {videoId}", source.videoId);
 
                 OptionSet optionSet = new OptionSet
                 {
                     // 最佳音質
-                    Format = "140/m4a/bestaudio",
+                    Format = "140/m4a",
                     NoCheckCertificate = true,
                     Output = tempPath.Replace(".tmp", "_org.%(ext)s")
                 };
+
+                if (File.Exists("aria2c.exe"))
+                {
+                    File.Copy("aria2c.exe", Path.Combine(tempDir, "aria2c.exe"), true);
+                    optionSet.ExternalDownloader = "aria2c";
+                    optionSet.ExternalDownloaderArgs = "-j 16 -s 16 -x 16 -k 1M --retry-wait 10 --max-tries 10";
+                }
+
+                // 下載音訊來源
+                log.LogInformation("Start to download audio source from youtube {videoId}", source.videoId);
 
                 string sourcePath = string.Empty;
                 YoutubeDLProcess youtubeDLProcess = new YoutubeDLProcess(youtubeDLPath);
