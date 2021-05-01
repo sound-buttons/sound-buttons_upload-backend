@@ -98,7 +98,8 @@ namespace SoundButtons
             string fileExtension = Path.GetExtension(tempPath);
 
             // Upload to Blob Storage
-            string sasContainerToken = await UploadAudioToStorageAsync(req, filename, directory, tempPath);
+            string sasContainerToken;
+            (filename, sasContainerToken) = await UploadAudioToStorageAsync(req, filename, directory, tempPath);
 
             await ProcessJsonFile(req, source, directory, filename, fileExtension, sasContainerToken);
 
@@ -269,7 +270,7 @@ namespace SoundButtons
             return tempPath;
         }
 
-        private async Task<string> UploadAudioToStorageAsync(HttpRequest req, string filename, string directory, string tempPath)
+        private async Task<(string, string)> UploadAudioToStorageAsync(HttpRequest req, string filename, string directory, string tempPath)
         {
             string fileExtension = Path.GetExtension(tempPath);
 
@@ -304,7 +305,7 @@ namespace SoundButtons
                 }
                 log.LogInformation("Upload audio to azure finish.");
             } finally { File.Delete(tempPath); }
-            return sasContainerToken;
+            return (filename, sasContainerToken);
         }
 
         private async Task ProcessJsonFile(HttpRequest req, Source source, string directory, string filename, string fileExtension, string sasContainerToken)
