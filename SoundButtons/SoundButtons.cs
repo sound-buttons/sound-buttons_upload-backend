@@ -522,6 +522,11 @@ namespace SoundButtons
         }
 #pragma warning restore IDE1006 // 命名樣式
         #endregion
+
+        [FunctionName("wake")]
+        public async Task<IActionResult> Wake([HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req,
+                                             ILogger log,
+                                             [Blob("sound-buttons"), StorageAccount("AzureStorage")] CloudBlobContainer cloudBlobContainer) => await Task.Run(() => { return new OkResult(); });
     }
 
     static class Extension
