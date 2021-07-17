@@ -527,6 +527,13 @@ namespace SoundButtons
         public async Task<IActionResult> Wake([HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req,
                                              ILogger log,
                                              [Blob("sound-buttons"), StorageAccount("AzureStorage")] CloudBlobContainer cloudBlobContainer) => await Task.Run(() => { return new OkResult(); });
+
+        [FunctionName("cache-exists")]
+        public IActionResult CacheExists([HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req,
+                                         ILogger log,
+                                         [Blob("sound-buttons"), StorageAccount("AzureStorage")] CloudBlobContainer cloudBlobContainer)
+            => new OkObjectResult(req.Query.TryGetValue("id", out var videoId)
+                                  && cloudBlobContainer.GetBlockBlobReference($"AudioSource/{videoId}").Exists());
     }
 
     static class Extension
