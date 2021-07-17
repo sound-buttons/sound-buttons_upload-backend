@@ -139,7 +139,7 @@ namespace SoundButtons
             // source檢核
             if (string.IsNullOrEmpty(source.videoId)
                 || source.end - source.start <= 0
-                || source.end - source.start > 60)
+                || source.end - source.start > 180)
             { throw new Exception("BadRequest"); }
 
             log.LogInformation("TempDir: {tempDir}", tempDir);
