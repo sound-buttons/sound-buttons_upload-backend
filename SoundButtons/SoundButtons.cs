@@ -1,3 +1,10 @@
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.Storage.Blob;
+using Microsoft.Azure.WebJobs;
+using Microsoft.Azure.WebJobs.Extensions.DurableTask;
+using Microsoft.Azure.WebJobs.Extensions.Http;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -7,12 +14,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Azure.Storage.Blob;
-using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Extensions.Http;
-using Microsoft.Extensions.Logging;
 using Xabe.FFmpeg;
 using Xabe.FFmpeg.Downloader;
 using YoutubeDLSharp;
@@ -22,13 +23,11 @@ namespace SoundButtons
 {
     public class SoundButtons
     {
-        ILogger log;
-        CloudBlobContainer cloudBlobContainer;
 
         [FunctionName("wake")]
         public async Task<IActionResult> Wake([HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req,
                                              ILogger log,
-                                             [Blob("sound-buttons"), StorageAccount("AzureStorage")] CloudBlobContainer cloudBlobContainer) 
+                                             [Blob("sound-buttons"), StorageAccount("AzureStorage")] CloudBlobContainer cloudBlobContainer)
             => await Task.Run(() => { return new OkResult(); });
 
         [FunctionName("cache-exists")]
@@ -39,13 +38,11 @@ namespace SoundButtons
                                   && cloudBlobContainer.GetBlockBlobReference($"AudioSource/{videoId}").Exists());
 
         [FunctionName("sound-buttons")]
-        public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
-                                             ILogger log,
-                                             [Blob("sound-buttons"), StorageAccount("AzureStorage")] CloudBlobContainer cloudBlobContainer)
+        public async Task<IActionResult> HttpStart(
+            [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
+            [DurableClient] IDurableOrchestrationClient starter,
+            ILogger log)
         {
-            this.log = log;
-            this.cloudBlobContainer = cloudBlobContainer;
-
             // 驗證ContentType為multipart/form-data
             string contentType = req.ContentType;
             log.LogInformation($"Content-Type: {contentType}");
@@ -95,32 +92,73 @@ namespace SoundButtons
             }
             log.LogInformation("{videoId}: {start}, {end}", source.videoId, source.start, source.end);
 
+            // source檢核
+            if (string.IsNullOrEmpty(source.videoId)
+                || source.end - source.start <= 0
+                || source.end - source.start > 180)
+                return (ActionResult)new BadRequestResult();
+
             // toast ID用於回傳，讓前端能取消顯示toast
             string toastId = req.Form.GetFirstValue("toastId") ?? "-1";
 
-            string tempPath;
-            try
-            { tempPath = await ProcessAudioAsync(req, source, cloudBlobContainer); }
-            catch (Exception e)
+            string tempPath = "";
+            IFormFileCollection files = req.Form.Files;
+            log.LogInformation("Files Count: {fileCount}", files.Count);
+            if (files.Count > 0)
             {
-                if (e.Message == "BadRequest")
-                {
-                    return (ActionResult)new BadRequestObjectResult(new string[] { name, toastId });
-                }
-                else { throw e; }
+                tempPath = ProcessAudioWithFile(files, source, log);
             }
-            string fileExtension = Path.GetExtension(tempPath);
 
-            // Upload to Blob Storage
-            string sasContainerToken;
-            (filename, sasContainerToken) = await UploadAudioToStorageAsync(req, filename, directory, tempPath);
+            string ip = req.Headers.FirstOrDefault(x => x.Key == "X-Forwarded-For").Value.FirstOrDefault();
 
-            await ProcessJsonFile(req, source, directory, filename, fileExtension, sasContainerToken);
+            string nameZH = req.Form.GetFirstValue("nameZH") ?? "";
+            string nameJP = req.Form.GetFirstValue("nameJP") ?? "";
+            if (!float.TryParse(req.Form.GetFirstValue("volume"), out float volume)) { volume = 1; }
+            string group = req.Form.GetFirstValue("group") ?? "未分類";
 
-            return (ActionResult)new OkObjectResult(new string[] { name, toastId });
+            // Function input comes from the request content.
+            string instanceId = await starter.StartNewAsync(
+                orchestratorFunctionName: "main-sound-buttons",
+                instanceId: null,
+                input: new Request()
+                {
+                    directory = directory,
+                    filename = filename,
+                    ip = ip,
+                    source = source,
+                    group = group,
+                    nameZH = nameZH,
+                    nameJP = nameJP,
+                    volume = volume,
+                    tempPath = tempPath
+                });
+
+            log.LogInformation($"Started orchestration with ID = '{instanceId}'.");
+
+            return starter.CreateCheckStatusResponse(req, instanceId, true);
         }
 
-        private async Task<string> ProcessAudioAsync(HttpRequest req, Source source, CloudBlobContainer cloudBlobContainer)
+        [FunctionName("main-sound-buttons")]
+        public async Task<bool> RunOrchestrator(
+            [OrchestrationTrigger] IDurableOrchestrationContext context,
+            ILogger log,
+            [Blob("sound-buttons"), StorageAccount("AzureStorage")] CloudBlobContainer cloudBlobContainer)
+        {
+            Request request = context.GetInput<Request>();
+            if (string.IsNullOrEmpty(request.tempPath))
+            {
+                request.tempPath = await context.CallActivityAsync<string>("ProcessAudioAsync", request.source);
+            }
+
+            // Upload to Blob Storage
+            request = await context.CallActivityAsync<Request>("UploadAudioToStorageAsync", request);
+
+            await context.CallActivityAsync("ProcessJsonFile", request);
+
+            return true;
+        }
+
+        private string ProcessAudioWithFile(IFormFileCollection files, Source source, ILogger log)
         {
 #if DEBUG
             string tempDir = Path.GetTempPath();
@@ -129,32 +167,33 @@ namespace SoundButtons
 #endif
             string tempPath = Path.Combine(tempDir, DateTime.Now.Ticks.ToString() + ".tmp");
 
-            #region 由上傳取得音檔
-            IFormFileCollection files = req.Form.Files;
-            log.LogInformation("Files Count: {fileCount}", files.Count);
-            if (files.Count > 0)
+            log.LogInformation("Get file from form post.");
+            // 有音檔，直接寫到暫存路徑使用
+            IFormFile file = files[0];
+            // Get file info
+            var _fileExtension = Path.GetExtension(file.FileName) ?? "";
+            tempPath = Path.ChangeExtension(tempPath, _fileExtension);
+            log.LogInformation($"Get extension: {_fileExtension}");
+            using (var fs = new FileStream(tempPath, FileMode.OpenOrCreate, FileAccess.Write))
             {
-                log.LogInformation("Get file from form post.");
-                // 有音檔，直接寫到暫存路徑使用
-                IFormFile file = files[0];
-                // Get file info
-                var _fileExtension = Path.GetExtension(file.FileName) ?? "";
-                tempPath = Path.ChangeExtension(tempPath, _fileExtension);
-                log.LogInformation($"Get extension: {_fileExtension}");
-                using (var fs = new FileStream(tempPath, FileMode.OpenOrCreate, FileAccess.Write))
-                {
-                    file.CopyTo(fs);
-                    log.LogInformation("Write file from upload.");
-                }
-                return tempPath;
+                file.CopyTo(fs);
+                log.LogInformation("Write file from upload.");
             }
-            #endregion
+            return tempPath;
+        }
 
-            // source檢核
-            if (string.IsNullOrEmpty(source.videoId)
-                || source.end - source.start <= 0
-                || source.end - source.start > 180)
-            { throw new Exception("BadRequest"); }
+        [FunctionName("ProcessAudioAsync")]
+        public static async Task<string> ProcessAudioAsync(
+            [ActivityTrigger] Source source,
+            ILogger log,
+            [Blob("sound-buttons"), StorageAccount("AzureStorage")] CloudBlobContainer cloudBlobContainer)
+        {
+#if DEBUG
+            string tempDir = Path.GetTempPath();
+#else
+            string tempDir = @"C:\home\data";
+#endif
+            string tempPath = Path.Combine(tempDir, DateTime.Now.Ticks.ToString() + ".tmp");
 
             log.LogInformation("TempDir: {tempDir}", tempDir);
 
@@ -180,8 +219,9 @@ namespace SoundButtons
                         }));
                     }
 
-                    tempPath = await CutAudioAsync(sourcePath, tempPath, source);
-                } finally { File.Delete(sourcePath); }
+                    tempPath = await CutAudioAsync(sourcePath, tempPath, source, log);
+                }
+                finally { File.Delete(sourcePath); }
 
                 return tempPath;
             }
@@ -250,19 +290,21 @@ namespace SoundButtons
                 {
                     try
                     {
-                        tempPath = await CutAudioAsync(sourcePath, tempPath, source);
-                    } finally { File.Delete(sourcePath); }
+                        tempPath = await CutAudioAsync(sourcePath, tempPath, source, log);
+                    }
+                    finally { File.Delete(sourcePath); }
                 }
                 else { throw new Exception("BadRequest"); }
                 return tempPath;
-            } finally { File.Delete(youtubeDLPath); }
+            }
+            finally { File.Delete(youtubeDLPath); }
             #endregion
         }
 
-        private async Task<string> CutAudioAsync(string sourcePath, string tempPath, Source source)
+        private static async Task<string> CutAudioAsync(string sourcePath, string tempPath, Source source, ILogger log)
         {
             log.LogInformation("Downloaded audio: {sourcePath}", sourcePath);
-            var fileExtension = Path.GetExtension(sourcePath);
+            string fileExtension = Path.GetExtension(sourcePath);
             log.LogInformation("Get extension: {fileExtension}", fileExtension);
             tempPath = Path.ChangeExtension(tempPath, fileExtension);
 
@@ -284,8 +326,16 @@ namespace SoundButtons
             return tempPath;
         }
 
-        private async Task<(string, string)> UploadAudioToStorageAsync(HttpRequest req, string filename, string directory, string tempPath)
+        [FunctionName("UploadAudioToStorageAsync")]
+        public static async Task<Request> UploadAudioToStorageAsync(
+            [ActivityTrigger] Request request,
+            ILogger log,
+            [Blob("sound-buttons"), StorageAccount("AzureStorage")] CloudBlobContainer cloudBlobContainer)
         {
+            string ip = request.ip;
+            string filename = request.filename;
+            string directory = request.directory;
+            string tempPath = request.tempPath;
             string fileExtension = Path.GetExtension(tempPath);
 
             // Get a new file name on blob storage
@@ -299,12 +349,11 @@ namespace SoundButtons
             log.LogInformation("Start to upload audio to blob storage {name}", cloudBlobContainer.Name);
 
             // Get a new SAS token for the file
-            string sasContainerToken = cloudBlockBlob.GetSharedAccessSignature(null, "永讀");
+            request.sasContainerToken = cloudBlockBlob.GetSharedAccessSignature(null, "永讀");
 
             // Set info on the blob storage block
             cloudBlockBlob.Properties.ContentType = "audio/basic";
 
-            string ip = req.Headers.FirstOrDefault(x => x.Key == "X-Forwarded-For").Value.FirstOrDefault();
             if (null != ip)
             {
                 cloudBlockBlob.Metadata.Add("sourceIp", ip);
@@ -318,12 +367,22 @@ namespace SoundButtons
                     await cloudBlockBlob.UploadFromStreamAsync(fs);
                 }
                 log.LogInformation("Upload audio to azure finish.");
-            } finally { File.Delete(tempPath); }
-            return (filename, sasContainerToken);
+            }
+            finally { File.Delete(tempPath); }
+            return request;
         }
 
-        private async Task ProcessJsonFile(HttpRequest req, Source source, string directory, string filename, string fileExtension, string sasContainerToken)
+        [FunctionName("ProcessJsonFile")]
+        public static async Task ProcessJsonFile(
+            [ActivityTrigger] Request request,
+            ILogger log,
+            [Blob("sound-buttons"), StorageAccount("AzureStorage")] CloudBlobContainer cloudBlobContainer)
         {
+            Source source = request.source;
+            string directory = request.directory;
+            string filename = request.filename;
+            string sasContainerToken = request.sasContainerToken;
+            string fileExtension = Path.GetExtension(filename);
             // Get last json file
             CloudBlockBlob jsonBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/{directory}.json");
             log.LogInformation("Read Json file {name}", jsonBlob.Name);
@@ -350,7 +409,7 @@ namespace SoundButtons
             JsonRoot json = UpdateJson(root,
                                        directory,
                                        filename + fileExtension,
-                                       req.Form,
+                                       request,
                                        source,
                                        sasContainerToken);
             byte[] result = JsonSerializer.SerializeToUtf8Bytes<JsonRoot>(
@@ -368,12 +427,12 @@ namespace SoundButtons
                          jsonBlob.UploadFromByteArrayAsync(result, 0, result.Length));
         }
 
-        private JsonRoot UpdateJson(JsonRoot root, string directory, string filename, IFormCollection form, Source source, string SASToken)
+        private static JsonRoot UpdateJson(JsonRoot root, string directory, string filename, Request request, Source source, string SASToken)
         {
             // Variables prepare
             string baseRoute = $"https://soundbuttons.blob.core.windows.net/sound-buttons/{directory}/";
 
-            string group = form.GetFirstValue("group") ?? "未分類";
+            string group = request.group;
 
             // Get ButtonGrop if exists, or new one
             ButtonGroup buttonGroup = null;
@@ -408,16 +467,13 @@ namespace SoundButtons
 
             // Add button
 
-            if (!float.TryParse(form.GetFirstValue("volume"), out float volume))
-            { volume = 1; }
-
             buttonGroup.buttons.Add(new Button(
                 filename,
                 new Text(
-                    form.GetFirstValue("nameZH") ?? "",
-                    form.GetFirstValue("nameJP") ?? ""
+                    request.nameZH,
+                    request.nameJP
                 ),
-                volume,
+                request.volume,
                 source,
                 SASToken
             ));
@@ -427,6 +483,20 @@ namespace SoundButtons
 
         #region POCO
 #pragma warning disable IDE1006 // 命名樣式
+        public class Request
+        {
+            public string ip { get; set; }
+            public string filename { get; set; }
+            public string directory { get; set; }
+            public Source source { get; set; }
+            public string nameZH { get; set; }
+            public string nameJP { get; set; }
+            public float volume { get; set; }
+            public string group { get; set; }
+            public string tempPath { get; set; }
+            public string sasContainerToken { get; set; }
+        }
+
         public class Color
         {
             public string primary { get; set; }
@@ -536,7 +606,6 @@ namespace SoundButtons
         }
 #pragma warning restore IDE1006 // 命名樣式
         #endregion
-
     }
 
     static class Extension
