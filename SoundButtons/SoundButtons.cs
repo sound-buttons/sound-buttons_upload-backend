@@ -24,6 +24,20 @@ namespace SoundButtons
     {
         ILogger log;
         CloudBlobContainer cloudBlobContainer;
+
+        [FunctionName("wake")]
+        public async Task<IActionResult> Wake([HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req,
+                                             ILogger log,
+                                             [Blob("sound-buttons"), StorageAccount("AzureStorage")] CloudBlobContainer cloudBlobContainer) 
+            => await Task.Run(() => { return new OkResult(); });
+
+        [FunctionName("cache-exists")]
+        public IActionResult CacheExists([HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req,
+                                         ILogger log,
+                                         [Blob("sound-buttons"), StorageAccount("AzureStorage")] CloudBlobContainer cloudBlobContainer)
+            => new OkObjectResult(req.Query.TryGetValue("id", out var videoId)
+                                  && cloudBlobContainer.GetBlockBlobReference($"AudioSource/{videoId}").Exists());
+
         [FunctionName("sound-buttons")]
         public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
                                              ILogger log,
@@ -523,17 +537,6 @@ namespace SoundButtons
 #pragma warning restore IDE1006 // 命名樣式
         #endregion
 
-        [FunctionName("wake")]
-        public async Task<IActionResult> Wake([HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req,
-                                             ILogger log,
-                                             [Blob("sound-buttons"), StorageAccount("AzureStorage")] CloudBlobContainer cloudBlobContainer) => await Task.Run(() => { return new OkResult(); });
-
-        [FunctionName("cache-exists")]
-        public IActionResult CacheExists([HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req,
-                                         ILogger log,
-                                         [Blob("sound-buttons"), StorageAccount("AzureStorage")] CloudBlobContainer cloudBlobContainer)
-            => new OkObjectResult(req.Query.TryGetValue("id", out var videoId)
-                                  && cloudBlobContainer.GetBlockBlobReference($"AudioSource/{videoId}").Exists());
     }
 
     static class Extension
