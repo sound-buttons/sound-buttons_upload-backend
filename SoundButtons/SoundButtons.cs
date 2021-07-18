@@ -130,7 +130,8 @@ namespace SoundButtons
                     nameZH = nameZH,
                     nameJP = nameJP,
                     volume = volume,
-                    tempPath = tempPath
+                    tempPath = tempPath,
+                    toastId = toastId
                 });
 
             log.LogInformation($"Started orchestration with ID = '{instanceId}'.");
@@ -495,6 +496,7 @@ namespace SoundButtons
             public string group { get; set; }
             public string tempPath { get; set; }
             public string sasContainerToken { get; set; }
+            public string toastId { get; set; }
         }
 
         public class Color
