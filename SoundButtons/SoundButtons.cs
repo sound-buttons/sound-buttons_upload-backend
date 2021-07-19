@@ -383,7 +383,7 @@ namespace SoundButtons
             string directory = request.directory;
             string filename = request.filename;
             string sasContainerToken = request.sasContainerToken;
-            string fileExtension = Path.GetExtension(filename);
+            string fileExtension = Path.GetExtension(request.tempPath);
             // Get last json file
             CloudBlockBlob jsonBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/{directory}.json");
             log.LogInformation("Read Json file {name}", jsonBlob.Name);
