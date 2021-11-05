@@ -209,7 +209,6 @@ namespace SoundButtons
             {
                 log.LogInformation("Start to download audio source from blob storage {name}", sourceBlob.Name);
                 string sourcePath = Path.Combine(tempDir, DateTime.Now.Ticks.ToString());
-                sourcePath = Path.ChangeExtension(sourcePath, "m4a");
                 try
                 {
                     using (var fs = new FileStream(sourcePath, FileMode.OpenOrCreate, FileAccess.Write))
@@ -218,6 +217,15 @@ namespace SoundButtons
                         {
                             return sourceBlob.DownloadToStreamAsync(fs);
                         }));
+                    }
+
+                    if (sourceBlob.Properties.ContentType.ToLower() == "audio/webm")
+                    {
+                        File.Move(sourcePath, Path.ChangeExtension(sourcePath, "webm"));
+                    }
+                    else if (sourceBlob.Properties.ContentType.ToLower() == "video/mp4")
+                    {
+                        File.Move(sourcePath, Path.ChangeExtension(sourcePath, "m4a"));
                     }
 
                     tempPath = await CutAudioAsync(sourcePath, tempPath, source, log);
@@ -249,7 +257,7 @@ namespace SoundButtons
                 OptionSet optionSet = new OptionSet
                 {
                     // 最佳音質
-                    Format = "140/m4a",
+                    Format = "251",
                     NoCheckCertificate = true,
                     Output = tempPath.Replace(".tmp", "_org.%(ext)s")
                 };
