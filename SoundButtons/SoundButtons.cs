@@ -222,10 +222,12 @@ namespace SoundButtons
                     if (sourceBlob.Properties.ContentType.ToLower() == "audio/webm")
                     {
                         File.Move(sourcePath, Path.ChangeExtension(sourcePath, "webm"));
+                        sourcePath = Path.ChangeExtension(sourcePath, "webm");
                     }
                     else if (sourceBlob.Properties.ContentType.ToLower() == "video/mp4")
                     {
                         File.Move(sourcePath, Path.ChangeExtension(sourcePath, "m4a"));
+                        sourcePath = Path.ChangeExtension(sourcePath, "m4a");
                     }
 
                     tempPath = await CutAudioAsync(sourcePath, tempPath, source, log);
