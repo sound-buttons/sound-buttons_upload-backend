@@ -92,12 +92,6 @@ namespace SoundButtons
             }
             log.LogInformation("{videoId}: {start}, {end}", source.videoId, source.start, source.end);
 
-            // source檢核
-            if (string.IsNullOrEmpty(source.videoId)
-                || source.end - source.start <= 0
-                || source.end - source.start > 180)
-                return (ActionResult)new BadRequestResult();
-
             // toast ID用於回傳，讓前端能取消顯示toast
             string toastId = req.Form.GetFirstValue("toastId") ?? "-1";
 
@@ -107,6 +101,13 @@ namespace SoundButtons
             if (files.Count > 0)
             {
                 tempPath = ProcessAudioWithFile(files, source, log);
+            }
+            // source檢核
+            else if (string.IsNullOrEmpty(source.videoId)
+                     || source.end - source.start <= 0
+                     || source.end - source.start > 180)
+            {
+                return (ActionResult)new BadRequestResult();
             }
 
             string ip = req.Headers.FirstOrDefault(x => x.Key == "X-Forwarded-For").Value.FirstOrDefault();
