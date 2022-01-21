@@ -1,6 +1,9 @@
+using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
+using Azure.Storage.Blobs.Specialized;
+using Azure.Storage.Sas;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Azure.Storage.Blob;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.DurableTask;
 using Microsoft.Azure.WebJobs.Extensions.Http;
@@ -28,15 +31,15 @@ namespace SoundButtons
         [FunctionName("wake")]
         public async Task<IActionResult> Wake([HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req,
                                              ILogger log,
-                                             [Blob("sound-buttons"), StorageAccount("AzureStorage")] CloudBlobContainer cloudBlobContainer)
+                                             [Blob("sound-buttons"), StorageAccount("AzureStorage")] BlobContainerClient BlobContainerClient)
             => await Task.Run(() => { return new OkResult(); });
 
         [FunctionName("cache-exists")]
         public IActionResult CacheExists([HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req,
                                          ILogger log,
-                                         [Blob("sound-buttons"), StorageAccount("AzureStorage")] CloudBlobContainer cloudBlobContainer)
+                                         [Blob("sound-buttons"), StorageAccount("AzureStorage")] BlobContainerClient BlobContainerClient)
             => new OkObjectResult(req.Query.TryGetValue("id", out var videoId)
-                                  && cloudBlobContainer.GetBlockBlobReference($"AudioSource/{videoId}").Exists());
+                                  && BlobContainerClient.GetBlobClient($"AudioSource/{videoId}").Exists());
 
         [FunctionName("sound-buttons")]
         public async Task<IActionResult> HttpStart(
@@ -166,7 +169,7 @@ namespace SoundButtons
         public async Task<bool> RunOrchestrator(
             [OrchestrationTrigger] IDurableOrchestrationContext context,
             ILogger log,
-            [Blob("sound-buttons"), StorageAccount("AzureStorage")] CloudBlobContainer cloudBlobContainer)
+            [Blob("sound-buttons"), StorageAccount("AzureStorage")] BlobContainerClient _)
         {
             Request request = context.GetInput<Request>();
             if (string.IsNullOrEmpty(request.tempPath))
@@ -210,7 +213,7 @@ namespace SoundButtons
         public static async Task<string> ProcessAudioAsync(
             [ActivityTrigger] Source source,
             ILogger log,
-            [Blob("sound-buttons"), StorageAccount("AzureStorage")] CloudBlobContainer cloudBlobContainer)
+            [Blob("sound-buttons"), StorageAccount("AzureStorage")] BlobContainerClient blobContainerClient)
         {
 #if DEBUG
             string tempDir = Path.GetTempPath();
@@ -227,27 +230,22 @@ namespace SoundButtons
             //log.LogInformation("FFmpeg Path: {ffmpegPath}", FFmpeg.ExecutablesPath);
 
             #region 由storage檢查音檔
-            CloudBlockBlob sourceBlob = cloudBlobContainer.GetBlockBlobReference($"AudioSource/{source.videoId}");
+            BlobClient sourceBlob = blobContainerClient.GetBlobClient($"AudioSource/{source.videoId}");
             if (sourceBlob.Exists())
             {
                 log.LogInformation("Start to download audio source from blob storage {name}", sourceBlob.Name);
                 string sourcePath = Path.Combine(tempDir, DateTime.Now.Ticks.ToString());
                 try
                 {
-                    using (var fs = new FileStream(sourcePath, FileMode.OpenOrCreate, FileAccess.Write))
-                    {
-                        Task.WaitAll(task, Task.Run(() =>
-                        {
-                            return sourceBlob.DownloadToStreamAsync(fs);
-                        }));
-                    }
+                    _ = sourceBlob.DownloadTo(sourcePath);
 
-                    if (sourceBlob.Properties.ContentType.ToLower() == "audio/webm")
+                    string contentType = sourceBlob.GetProperties().Value.ContentType;
+                    if (contentType.ToLower() == "audio/webm")
                     {
                         File.Move(sourcePath, Path.ChangeExtension(sourcePath, "webm"));
                         sourcePath = Path.ChangeExtension(sourcePath, "webm");
                     }
-                    else if (sourceBlob.Properties.ContentType.ToLower() == "video/mp4")
+                    else if (contentType.ToLower() == "video/mp4")
                     {
                         File.Move(sourcePath, Path.ChangeExtension(sourcePath, "m4a"));
                         sourcePath = Path.ChangeExtension(sourcePath, "m4a");
@@ -269,7 +267,7 @@ namespace SoundButtons
                 {
                     // 同步下載youtube-dl.exe (youtube-dlc)
                     var wc = new System.Net.WebClient();
-                    wc.DownloadFile(new Uri(@"https://github.com/blackjack4494/yt-dlc/releases/latest/download/youtube-dlc.exe"), youtubeDLPath);
+                    await wc.DownloadFileTaskAsync(new Uri(@"https://github.com/blackjack4494/yt-dlc/releases/latest/download/youtube-dlc.exe"), youtubeDLPath);
                 }
                 catch (System.Net.WebException)
                 {
@@ -314,7 +312,7 @@ namespace SoundButtons
                 youtubeDLProcess.ErrorReceived += (object sender, System.Diagnostics.DataReceivedEventArgs e)
                     => log.LogError(e.Data);
 
-                Task.WaitAll(task, youtubeDLProcess.RunAsync(
+                await Task.WhenAll(task, youtubeDLProcess.RunAsync(
                     new string[] { @$"https://youtu.be/{source.videoId}" },
                     optionSet,
                     new System.Threading.CancellationToken())
@@ -364,7 +362,7 @@ namespace SoundButtons
         public static async Task<Request> UploadAudioToStorageAsync(
             [ActivityTrigger] Request request,
             ILogger log,
-            [Blob("sound-buttons"), StorageAccount("AzureStorage")] CloudBlobContainer cloudBlobContainer)
+            [Blob("sound-buttons"), StorageAccount("AzureStorage")] BlobContainerClient blobContainerClient)
         {
             string ip = request.ip;
             string filename = request.filename;
@@ -373,24 +371,45 @@ namespace SoundButtons
             string fileExtension = Path.GetExtension(tempPath);
 
             // Get a new file name on blob storage
-            CloudBlockBlob cloudBlockBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/{filename + fileExtension}");
+            BlobClient cloudBlockBlob = blobContainerClient.GetBlobClient($"{directory}/{filename + fileExtension}");
             if (cloudBlockBlob.Exists())
             {
                 filename += $"_{DateTime.Now.Ticks}";
-                cloudBlockBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/{filename + fileExtension}");
+                cloudBlockBlob = blobContainerClient.GetBlobClient($"{directory}/{filename + fileExtension}");
             }
             log.LogInformation($"Filename: {filename + fileExtension}");
-            log.LogInformation("Start to upload audio to blob storage {name}", cloudBlobContainer.Name);
+            log.LogInformation("Start to upload audio to blob storage {name}", blobContainerClient.Name);
 
             // Get a new SAS token for the file
-            request.sasContainerToken = cloudBlockBlob.GetSharedAccessSignature(null, "永讀");
+            // Check whether this BlobClient object has been authorized with Shared Key.
+            if (cloudBlockBlob.CanGenerateSasUri)
+            {
+                BlobSasBuilder sasBuilder = new BlobSasBuilder()
+                {
+                    BlobContainerName = cloudBlockBlob.GetParentBlobContainerClient().Name,
+                    BlobName = cloudBlockBlob.Name,
+                    Resource = "b",
+                    Identifier = "永讀"
+                };
 
-            // Set info on the blob storage block
-            cloudBlockBlob.Properties.ContentType = "audio/basic";
+                Uri sasUri = cloudBlockBlob.GenerateSasUri(sasBuilder);
+                log.LogInformation($"SAS URI for blob is: {sasUri}");
+
+                request.sasContainerToken = sasUri.ToString();
+            }
+            else
+            {
+                log.LogCritical(@"BlobClient must be authorized with Shared Key 
+                          credentials to create a service SAS.");
+            }
 
             if (null != ip)
             {
-                cloudBlockBlob.Metadata.Add("sourceIp", ip);
+                Dictionary<string, string> metadata = new Dictionary<string, string>
+                {
+                    { "sourceIp", ip }
+                };
+                await cloudBlockBlob.SetMetadataAsync(metadata);
             }
 
             try
@@ -398,7 +417,7 @@ namespace SoundButtons
                 // Write audio file 
                 using (var fs = new FileStream(tempPath, FileMode.Open))
                 {
-                    await cloudBlockBlob.UploadFromStreamAsync(fs);
+                    await cloudBlockBlob.UploadAsync(fs, new BlobUploadOptions { HttpHeaders = new BlobHttpHeaders { ContentType = "audio/basic" } });
                 }
                 log.LogInformation("Upload audio to azure finish.");
             }
@@ -410,7 +429,7 @@ namespace SoundButtons
         public static async Task ProcessJsonFile(
             [ActivityTrigger] Request request,
             ILogger log,
-            [Blob("sound-buttons"), StorageAccount("AzureStorage")] CloudBlobContainer cloudBlobContainer)
+            [Blob("sound-buttons"), StorageAccount("AzureStorage")] BlobContainerClient BlobContainerClient)
         {
             Source source = request.source;
             string directory = request.directory;
@@ -418,7 +437,7 @@ namespace SoundButtons
             string sasContainerToken = request.sasContainerToken;
             string fileExtension = Path.GetExtension(request.tempPath);
             // Get last json file
-            CloudBlockBlob jsonBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/{directory}.json");
+            BlobClient jsonBlob = BlobContainerClient.GetBlobClient($"{directory}/{directory}.json");
             log.LogInformation("Read Json file {name}", jsonBlob.Name);
 
             JsonRoot root;
@@ -435,9 +454,7 @@ namespace SoundButtons
             }
 
             // Get new json file block
-            CloudBlockBlob newjsonBlob = cloudBlobContainer.GetBlockBlobReference($"{directory}/UploadJson/{DateTime.Now:yyyy-MM-dd-HH-mm}.json");
-
-            newjsonBlob.Properties.ContentType = "application/json";
+            BlobClient newjsonBlob = BlobContainerClient.GetBlobClient($"{directory}/UploadJson/{DateTime.Now:yyyy-MM-dd-HH-mm}.json");
 
             // Generate new json file
             JsonRoot json = UpdateJson(root,
@@ -456,9 +473,11 @@ namespace SoundButtons
 
             log.LogInformation("Write Json {name}", jsonBlob.Name);
             log.LogInformation("Write Json backup {name}", newjsonBlob.Name);
+
             // Write new json file
-            Task.WaitAll(newjsonBlob.UploadFromByteArrayAsync(result, 0, result.Length),
-                         jsonBlob.UploadFromByteArrayAsync(result, 0, result.Length));
+            var option = new BlobUploadOptions { HttpHeaders = new BlobHttpHeaders { ContentType = "application/json" } };
+            await Task.WhenAll(newjsonBlob.UploadAsync(new BinaryData(result), option),
+                               jsonBlob.UploadAsync(new BinaryData(result), option));
         }
 
         private static JsonRoot UpdateJson(JsonRoot root, string directory, string filename, Request request, Source source, string SASToken)

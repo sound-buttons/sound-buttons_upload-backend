@@ -1,16 +1,16 @@
 {
   "dependencies": {
-    "storage1": {
-      "resourceId": "/subscriptions/[parameters('subscriptionId')]/resourceGroups/[parameters('resourceGroupName')]/providers/Microsoft.Storage/storageAccounts/soundbuttons",
-      "type": "storage.azure",
-      "connectionId": "AzureStorage",
-      "secretStore": "LocalSecretsFile"
-    },
     "appInsights1": {
+      "secretStore": null,
       "resourceId": null,
       "type": "appInsights.sdk",
-      "connectionId": null,
-      "secretStore": null
+      "connectionId": null
+    },
+    "storage1": {
+      "secretStore": "LocalSecretsFile",
+      "resourceId": "/subscriptions/[parameters('subscriptionId')]/resourceGroups/[parameters('resourceGroupName')]/providers/Microsoft.Storage/storageAccounts/soundbuttons",
+      "type": "storage.azure",
+      "connectionId": "AzureStorage"
     }
   }
 }
