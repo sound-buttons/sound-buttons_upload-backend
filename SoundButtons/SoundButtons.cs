@@ -100,18 +100,18 @@ namespace SoundButtons
             string clip = (req.Form.GetFirstValue("clip"));
             if (string.IsNullOrEmpty(clip))
             {
-                using HttpClient client = new HttpClient();
+                using HttpClient client = new();
                 var response = await client.GetAsync(clip);
                 string body = await response.RequestMessage.Content.ReadAsStringAsync();
 
                 // "clipConfig":{"postId":"UgkxVQpxshiN76QUwblPu-ggj6fl594-ORiU","startTimeMs":"1891037","endTimeMs":"1906037"}
-                Regex reg1 = new Regex(@"clipConfig"":{""postId"":""([\w-]+)"",""startTimeMs"":""(\d+)"",""endTimeMs"":""(\d+)""}");
+                Regex reg1 = new(@"clipConfig"":{""postId"":""([\w-]+)"",""startTimeMs"":""(\d+)"",""endTimeMs"":""(\d+)""}");
                 MatchCollection match1 = reg1.Matches(body);
                 source.start = Convert.ToInt32(match1[1].Value);
                 source.end = Convert.ToInt32(match1[2].Value);
 
                 // {"videoId":"Gs7QYATahy4"}
-                Regex reg2 = new Regex(@"{""videoId"":""([\w-]+)""}");
+                Regex reg2 = new(@"{""videoId"":""([\w-]+)""}");
                 Match match2 = reg2.Match(body);
                 source.videoId = match2.Value;
             }
@@ -168,8 +168,7 @@ namespace SoundButtons
         [FunctionName("main-sound-buttons")]
         public async Task<bool> RunOrchestrator(
             [OrchestrationTrigger] IDurableOrchestrationContext context,
-            ILogger log,
-            [Blob("sound-buttons"), StorageAccount("AzureStorage")] BlobContainerClient _)
+            ILogger log)
         {
             Request request = context.GetInput<Request>();
             if (string.IsNullOrEmpty(request.tempPath))
@@ -266,10 +265,15 @@ namespace SoundButtons
                 try
                 {
                     // 同步下載youtube-dl.exe (youtube-dlc)
-                    var wc = new System.Net.WebClient();
-                    await wc.DownloadFileTaskAsync(new Uri(@"https://github.com/blackjack4494/yt-dlc/releases/latest/download/youtube-dlc.exe"), youtubeDLPath);
+                    HttpClient httpClient = new();
+                    using HttpResponseMessage response = await httpClient.GetAsync(new Uri(@"https://github.com/blackjack4494/yt-dlc/releases/latest/download/youtube-dlc.exe").ToString());
+                    response.EnsureSuccessStatusCode();
+                    using var ms = await response.Content.ReadAsStreamAsync();
+                    using var fs = File.Create(youtubeDLPath);
+                    ms.Seek(0, SeekOrigin.Begin);
+                    await ms.CopyToAsync(fs);
                 }
-                catch (System.Net.WebException)
+                catch (Exception)
                 {
                     // WebException fallback
                     if (File.Exists("youtube-dlc.exe"))
@@ -277,7 +281,7 @@ namespace SoundButtons
                 }
                 log.LogInformation("Download youtube-dl.exe at {ytdlPath}", youtubeDLPath);
 
-                OptionSet optionSet = new OptionSet
+                OptionSet optionSet = new()
                 {
                     // 最佳音質
                     Format = "251",
@@ -296,7 +300,7 @@ namespace SoundButtons
                 log.LogInformation("Start to download audio source from youtube {videoId}", source.videoId);
 
                 string sourcePath = string.Empty;
-                YoutubeDLProcess youtubeDLProcess = new YoutubeDLProcess(youtubeDLPath);
+                YoutubeDLProcess youtubeDLProcess = new(youtubeDLPath);
 
                 youtubeDLProcess.OutputReceived += (object sender, System.Diagnostics.DataReceivedEventArgs e) =>
                 {
@@ -384,7 +388,7 @@ namespace SoundButtons
             // Check whether this BlobClient object has been authorized with Shared Key.
             if (cloudBlockBlob.CanGenerateSasUri)
             {
-                BlobSasBuilder sasBuilder = new BlobSasBuilder()
+                BlobSasBuilder sasBuilder = new()
                 {
                     BlobContainerName = cloudBlockBlob.GetParentBlobContainerClient().Name,
                     BlobName = cloudBlockBlob.Name,
@@ -405,7 +409,7 @@ namespace SoundButtons
 
             if (null != ip)
             {
-                Dictionary<string, string> metadata = new Dictionary<string, string>
+                Dictionary<string, string> metadata = new()
                 {
                     { "sourceIp", ip }
                 };
@@ -621,10 +625,9 @@ namespace SoundButtons
             public Source source { get; set; }
             public string SASToken { get; set; }
 
-            public Button()
-            {
-                this.volume = volume;
-            }
+#pragma warning disable CA2245 // 請勿將屬性指派給屬性自身
+            public Button() => this.volume = volume;
+#pragma warning restore CA2245 // 請勿將屬性指派給屬性自身
 
             public Button(string filename, object text, float volume, Source source, string sASToken)
             {

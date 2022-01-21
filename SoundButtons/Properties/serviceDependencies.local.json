@@ -1,11 +1,5 @@
 {
   "dependencies": {
-    "appInsights1": {
-      "secretStore": null,
-      "resourceId": null,
-      "type": "appInsights.sdk",
-      "connectionId": null
-    },
     "storage1": {
       "secretStore": "LocalSecretsFile",
       "resourceId": "/subscriptions/[parameters('subscriptionId')]/resourceGroups/[parameters('resourceGroupName')]/providers/Microsoft.Storage/storageAccounts/soundbuttons",
