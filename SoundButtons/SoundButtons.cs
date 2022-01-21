@@ -9,6 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -92,6 +93,26 @@ namespace SoundButtons
             }
             log.LogInformation("{videoId}: {start}, {end}", source.videoId, source.start, source.end);
 
+            // 處理剪輯片段
+            string clip = (req.Form.GetFirstValue("clip"));
+            if (string.IsNullOrEmpty(clip))
+            {
+                using HttpClient client = new HttpClient();
+                var response = await client.GetAsync(clip);
+                string body = await response.RequestMessage.Content.ReadAsStringAsync();
+
+                // "clipConfig":{"postId":"UgkxVQpxshiN76QUwblPu-ggj6fl594-ORiU","startTimeMs":"1891037","endTimeMs":"1906037"}
+                Regex reg1 = new Regex(@"clipConfig"":{""postId"":""([\w-]+)"",""startTimeMs"":""(\d+)"",""endTimeMs"":""(\d+)""}");
+                MatchCollection match1 = reg1.Matches(body);
+                source.start = Convert.ToInt32(match1[1].Value);
+                source.end = Convert.ToInt32(match1[2].Value);
+
+                // {"videoId":"Gs7QYATahy4"}
+                Regex reg2 = new Regex(@"{""videoId"":""([\w-]+)""}");
+                Match match2 = reg2.Match(body);
+                source.videoId = match2.Value;
+            }
+
             // toast ID用於回傳，讓前端能取消顯示toast
             string toastId = req.Form.GetFirstValue("toastId") ?? "-1";
 
@@ -132,7 +153,8 @@ namespace SoundButtons
                     nameJP = nameJP,
                     volume = volume,
                     tempPath = tempPath,
-                    toastId = toastId
+                    toastId = toastId,
+                    clip = clip
                 });
 
             log.LogInformation($"Started orchestration with ID = '{instanceId}'.");
@@ -501,6 +523,7 @@ namespace SoundButtons
             public string filename { get; set; }
             public string directory { get; set; }
             public Source source { get; set; }
+            public string clip { get; set; }
             public string nameZH { get; set; }
             public string nameJP { get; set; }
             public float volume { get; set; }
