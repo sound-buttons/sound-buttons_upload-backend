@@ -27,22 +27,21 @@ namespace SoundButtons
 {
     public class SoundButtons
     {
-
         [FunctionName("wake")]
-        public async Task<IActionResult> Wake([HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req,
+        public static async Task<IActionResult> Wake([HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req,
                                              ILogger log,
                                              [Blob("sound-buttons"), StorageAccount("AzureStorage")] BlobContainerClient BlobContainerClient)
             => await Task.Run(() => { return new OkResult(); });
 
         [FunctionName("cache-exists")]
-        public IActionResult CacheExists([HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req,
+        public static IActionResult CacheExists([HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req,
                                          ILogger log,
                                          [Blob("sound-buttons"), StorageAccount("AzureStorage")] BlobContainerClient BlobContainerClient)
             => new OkObjectResult(req.Query.TryGetValue("id", out var videoId)
                                   && BlobContainerClient.GetBlobClient($"AudioSource/{videoId}").Exists());
 
         [FunctionName("sound-buttons")]
-        public async Task<IActionResult> HttpStart(
+        public static async Task<IActionResult> HttpStart(
             [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
             [DurableClient] IDurableOrchestrationClient starter,
             ILogger log)
@@ -94,27 +93,27 @@ namespace SoundButtons
                     source.end = 0;
                 }
             }
-            log.LogInformation("{videoId}: {start}, {end}", source.videoId, source.start, source.end);
 
             // 處理剪輯片段
-            string clip = (req.Form.GetFirstValue("clip"));
-            if (string.IsNullOrEmpty(clip))
+            string clip = req.Form.GetFirstValue("clip");
+            if (!string.IsNullOrEmpty(clip))
             {
                 using HttpClient client = new();
                 var response = await client.GetAsync(clip);
-                string body = await response.RequestMessage.Content.ReadAsStringAsync();
+                string body = await response.Content.ReadAsStringAsync();
 
                 // "clipConfig":{"postId":"UgkxVQpxshiN76QUwblPu-ggj6fl594-ORiU","startTimeMs":"1891037","endTimeMs":"1906037"}
                 Regex reg1 = new(@"clipConfig"":{""postId"":""([\w-]+)"",""startTimeMs"":""(\d+)"",""endTimeMs"":""(\d+)""}");
-                MatchCollection match1 = reg1.Matches(body);
-                source.start = Convert.ToInt32(match1[1].Value);
-                source.end = Convert.ToInt32(match1[2].Value);
+                Match match1 = reg1.Match(body);
+                source.start = Convert.ToInt32(match1.Groups[2].Value) / 1000;
+                source.end = Convert.ToInt32(match1.Groups[3].Value) / 1000;
 
                 // {"videoId":"Gs7QYATahy4"}
-                Regex reg2 = new(@"{""videoId"":""([\w-]+)""}");
+                Regex reg2 = new(@"{""videoId"":""([\w-]+)""");
                 Match match2 = reg2.Match(body);
-                source.videoId = match2.Value;
+                source.videoId = match2.Groups[1].Value;
             }
+            log.LogInformation("{videoId}: {start}, {end}", source.videoId, source.start, source.end);
 
             // toast ID用於回傳，讓前端能取消顯示toast
             string toastId = req.Form.GetFirstValue("toastId") ?? "-1";
@@ -166,7 +165,7 @@ namespace SoundButtons
         }
 
         [FunctionName("main-sound-buttons")]
-        public async Task<bool> RunOrchestrator(
+        public static async Task<bool> RunOrchestrator(
             [OrchestrationTrigger] IDurableOrchestrationContext context,
             ILogger log)
         {
@@ -184,7 +183,7 @@ namespace SoundButtons
             return true;
         }
 
-        private string ProcessAudioWithFile(IFormFileCollection files, Source source, ILogger log)
+        private static string ProcessAudioWithFile(IFormFileCollection files, Source source, ILogger log)
         {
 #if DEBUG
             string tempDir = Path.GetTempPath();
@@ -381,8 +380,8 @@ namespace SoundButtons
                 filename += $"_{DateTime.Now.Ticks}";
                 cloudBlockBlob = blobContainerClient.GetBlobClient($"{directory}/{filename + fileExtension}");
             }
+            request.filename = filename;
             log.LogInformation($"Filename: {filename + fileExtension}");
-            log.LogInformation("Start to upload audio to blob storage {name}", blobContainerClient.Name);
 
             // Get a new SAS token for the file
             // Check whether this BlobClient object has been authorized with Shared Key.
@@ -399,13 +398,22 @@ namespace SoundButtons
                 Uri sasUri = cloudBlockBlob.GenerateSasUri(sasBuilder);
                 log.LogInformation($"SAS URI for blob is: {sasUri}");
 
-                request.sasContainerToken = sasUri.ToString();
+                request.sasContainerToken = sasUri.Query;
             }
             else
             {
                 log.LogCritical(@"BlobClient must be authorized with Shared Key 
                           credentials to create a service SAS.");
             }
+
+            try
+            {
+                // Write audio file 
+                log.LogInformation("Start to upload audio to blob storage {name}", blobContainerClient.Name);
+                await cloudBlockBlob.UploadAsync(tempPath, new BlobUploadOptions { HttpHeaders = new BlobHttpHeaders { ContentType = "audio/basic" } });
+                log.LogInformation("Upload audio to azure finish.");
+            }
+            finally { File.Delete(tempPath); }
 
             if (null != ip)
             {
@@ -415,17 +423,6 @@ namespace SoundButtons
                 };
                 await cloudBlockBlob.SetMetadataAsync(metadata);
             }
-
-            try
-            {
-                // Write audio file 
-                using (var fs = new FileStream(tempPath, FileMode.Open))
-                {
-                    await cloudBlockBlob.UploadAsync(fs, new BlobUploadOptions { HttpHeaders = new BlobHttpHeaders { ContentType = "audio/basic" } });
-                }
-                log.LogInformation("Upload audio to azure finish.");
-            }
-            finally { File.Delete(tempPath); }
             return request;
         }
 
