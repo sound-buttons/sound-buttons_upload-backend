@@ -440,13 +440,33 @@ namespace SoundButtons
             string fileExtension = Path.GetExtension(request.tempPath);
             // Get last json file
             BlobClient jsonBlob = BlobContainerClient.GetBlobClient($"{directory}/{directory}.json");
+            if (!jsonBlob.Exists().Value)
+            {
+                log.LogCritical("{jsonFile} not found!!", jsonBlob.Name);
+                return;
+            }
             log.LogInformation("Read Json file {name}", jsonBlob.Name);
 
             JsonRoot root;
             // Read last json file
-            using (Stream input = jsonBlob.OpenRead())
+            using (MemoryStream ms = new())
             {
-                root = await JsonSerializer.DeserializeAsync<JsonRoot>(input, new JsonSerializerOptions
+                try
+                {
+                    await jsonBlob.OpenRead().CopyToAsync(ms);
+                }
+                catch (OutOfMemoryException)
+                {
+                    log.LogError("System.OutOfMemoryException!! Directly try again.");
+                    // Retry and let it fail if it comes up again.
+                    await jsonBlob.OpenRead(new BlobOpenReadOptions(false)
+                    {
+                        BufferSize = 8192,
+                        Position = 0
+                    }).CopyToAsync(ms);
+                }
+
+                root = await JsonSerializer.DeserializeAsync<JsonRoot>(ms, new JsonSerializerOptions
                 {
                     ReadCommentHandling = JsonCommentHandling.Skip,
                     AllowTrailingCommas = true,
