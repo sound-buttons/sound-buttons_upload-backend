@@ -466,6 +466,7 @@ namespace SoundButtons
                     }).CopyToAsync(ms);
                 }
 
+                ms.Seek(0,SeekOrigin.Begin);
                 root = await JsonSerializer.DeserializeAsync<JsonRoot>(ms, new JsonSerializerOptions
                 {
                     ReadCommentHandling = JsonCommentHandling.Skip,
