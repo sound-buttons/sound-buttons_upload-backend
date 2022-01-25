@@ -258,25 +258,26 @@ namespace SoundButtons
             #endregion
 
             #region 由youtube下載音檔
-            string youtubeDLPath = Path.Combine(tempDir, DateTime.Now.Ticks.ToString() + "youtube-dl.exe");
+            string youtubeDLPath = Path.Combine(tempDir, DateTime.Now.Ticks.ToString() + "yt-dlp.exe");
             try
             {
                 try
                 {
-                    // 同步下載youtube-dl.exe (youtube-dlc)
+                    // 同步下載youtube-dl.exe (yt-dlp.exe)
                     HttpClient httpClient = new();
-                    using HttpResponseMessage response = await httpClient.GetAsync(new Uri(@"https://github.com/blackjack4494/yt-dlc/releases/latest/download/youtube-dlc.exe").ToString());
+                    using HttpResponseMessage response = await httpClient.GetAsync(new Uri(@"https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe").ToString());
                     response.EnsureSuccessStatusCode();
                     using var ms = await response.Content.ReadAsStreamAsync();
                     using var fs = File.Create(youtubeDLPath);
                     ms.Seek(0, SeekOrigin.Begin);
                     await ms.CopyToAsync(fs);
+                    await fs.FlushAsync();
                 }
                 catch (Exception)
                 {
-                    // WebException fallback
-                    if (File.Exists("youtube-dlc.exe"))
-                        File.Copy("youtube-dlc.exe", youtubeDLPath, true);
+                    // Download failed fallback
+                    if (File.Exists("yt-dlp.exe"))
+                        File.Copy("yt-dlp.exe", youtubeDLPath, true);
                 }
                 log.LogInformation("Download youtube-dl.exe at {ytdlPath}", youtubeDLPath);
 
