@@ -67,16 +67,20 @@ namespace SoundButtons
             log.LogInformation($"Directory: {directory}");
 
             // 取得youtube影片id和秒數
-            _ = int.TryParse(req.Form.GetFirstValue("start"), out int start);
-            _ = int.TryParse(req.Form.GetFirstValue("end"), out int end);
             var source = new Source
             {
                 videoId = req.Form.GetFirstValue("videoId") ?? "",
-                start = start,
-                end = end
+                start = 0,
+                end = 0
             };
+            if(double.TryParse(req.Form.GetFirstValue("start"), out double start)
+                && double.TryParse(req.Form.GetFirstValue("end"), out double end))
+            {
+                source.start = start;
+                source.end = end;
+            }
 
-            if (source.videoId.StartsWith("http"))
+            if (!string.IsNullOrEmpty(source.videoId) && source.videoId.StartsWith("http"))
             {
                 // Regex for strip youtube video id from url c# and returl default thumbnail
                 // https://gist.github.com/Flatlineato/f4cc3f3937272646d4b0
@@ -96,17 +100,22 @@ namespace SoundButtons
 
             // 處理剪輯片段
             string clip = req.Form.GetFirstValue("clip");
-            if (!string.IsNullOrEmpty(clip))
+            Regex clipReg = new(@"https?:\/\/(?:[0-9A-Z-]+\.)?(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/)clip\/[?=&+%\w.-]*");
+            if (!string.IsNullOrEmpty(clip) && clipReg.IsMatch(clip))
             {
                 using HttpClient client = new();
                 var response = await client.GetAsync(clip);
                 string body = await response.Content.ReadAsStringAsync();
 
                 // "clipConfig":{"postId":"UgkxVQpxshiN76QUwblPu-ggj6fl594-ORiU","startTimeMs":"1891037","endTimeMs":"1906037"}
-                Regex reg1 = new(@"clipConfig"":{""postId"":""([\w-]+)"",""startTimeMs"":""(\d+)"",""endTimeMs"":""(\d+)""}");
+                Regex reg1 = new(@"clipConfig"":{""postId"":""(?:[\w-]+)"",""startTimeMs"":""(\d+)"",""endTimeMs"":""(\d+)""}");
                 Match match1 = reg1.Match(body);
-                source.start = Convert.ToInt32(match1.Groups[2].Value) / 1000;
-                source.end = Convert.ToInt32(match1.Groups[3].Value) / 1000;
+                if (double.TryParse(match1.Groups[1].Value, out double _start)
+                    && double.TryParse(match1.Groups[2].Value, out double _end))
+                {
+                    source.start = _start / 1000;
+                    source.end = _end / 1000;
+                }
 
                 // {"videoId":"Gs7QYATahy4"}
                 Regex reg2 = new(@"{""videoId"":""([\w-]+)""");
@@ -466,7 +475,7 @@ namespace SoundButtons
                     }).CopyToAsync(ms);
                 }
 
-                ms.Seek(0,SeekOrigin.Begin);
+                ms.Seek(0, SeekOrigin.Begin);
                 root = await JsonSerializer.DeserializeAsync<JsonRoot>(ms, new JsonSerializerOptions
                 {
                     ReadCommentHandling = JsonCommentHandling.Skip,
@@ -615,12 +624,12 @@ namespace SoundButtons
         public class Source
         {
             public string videoId { get; set; }
-            public int start { get; set; }
-            public int end { get; set; }
+            public double start { get; set; }
+            public double end { get; set; }
 
             public Source() { }
 
-            public Source(string videoId, int start, int end)
+            public Source(string videoId, double start, double end)
             {
                 this.videoId = videoId;
                 this.start = start;
