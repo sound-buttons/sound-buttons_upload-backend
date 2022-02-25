@@ -73,7 +73,7 @@ namespace SoundButtons
                 start = 0,
                 end = 0
             };
-            if(double.TryParse(req.Form.GetFirstValue("start"), out double start)
+            if (double.TryParse(req.Form.GetFirstValue("start"), out double start)
                 && double.TryParse(req.Form.GetFirstValue("end"), out double end))
             {
                 source.start = start;
@@ -86,7 +86,7 @@ namespace SoundButtons
                 // https://gist.github.com/Flatlineato/f4cc3f3937272646d4b0
                 source.videoId = Regex.Match(
                     source.videoId,
-                    "https?:\\/\\/(?:[0-9A-Z-]+\\.)?(?:youtu\\.be\\/|youtube(?:-nocookie)?\\.com\\S*[^\\w\\s-])([\\w-]{11})(?=[^\\w-]|$)(?![?=&+%\\w.-]*(?:['\"][^<>]*>|<\\/a>))[?=&+%\\w.-]*",
+                    "https?:\\/\\/(?:[\\w-]+\\.)?(?:youtu\\.be\\/|youtube(?:-nocookie)?\\.com\\S*[^\\w\\s-])([\\w-]{11})(?=[^\\w-]|$)(?![?=&+%\\w.-]*(?:['\"][^<>]*>|<\\/a>))[?=&+%\\w.-]*",
                     RegexOptions.IgnoreCase).Groups[1].Value;
 
                 if (string.IsNullOrEmpty(source.videoId))
@@ -95,12 +95,14 @@ namespace SoundButtons
                     source.videoId = "";
                     source.start = 0;
                     source.end = 0;
+                    log.LogError("Discard unknown source: {source}", source.videoId);
                 }
+                log.LogInformation("Get info from form: {videoId}, {start}, {end}", source.videoId, source.start, source.end);
             }
 
             // 處理剪輯片段
             string clip = req.Form.GetFirstValue("clip");
-            Regex clipReg = new(@"https?:\/\/(?:[0-9A-Z-]+\.)?(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/)clip\/[?=&+%\w.-]*");
+            Regex clipReg = new(@"https?:\/\/(?:[\w-]+\.)?(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/)clip\/[?=&+%\w.-]*");
             if (!string.IsNullOrEmpty(clip) && clipReg.IsMatch(clip))
             {
                 using HttpClient client = new();
@@ -121,8 +123,8 @@ namespace SoundButtons
                 Regex reg2 = new(@"{""videoId"":""([\w-]+)""");
                 Match match2 = reg2.Match(body);
                 source.videoId = match2.Groups[1].Value;
+                log.LogInformation("Get info from clip: {videoId}, {start}, {end}", source.videoId, source.start, source.end);
             }
-            log.LogInformation("{videoId}: {start}, {end}", source.videoId, source.start, source.end);
 
             // toast ID用於回傳，讓前端能取消顯示toast
             string toastId = req.Form.GetFirstValue("toastId") ?? "-1";
@@ -139,6 +141,7 @@ namespace SoundButtons
                      || source.end - source.start <= 0
                      || source.end - source.start > 180)
             {
+                log.LogError("video time invalid: {start}, {end}", source.start, source.end);
                 return (ActionResult)new BadRequestResult();
             }
 
