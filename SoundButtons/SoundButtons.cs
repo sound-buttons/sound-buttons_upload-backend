@@ -1,7 +1,5 @@
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
-using Azure.Storage.Blobs.Specialized;
-using Azure.Storage.Sas;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.WebJobs;
@@ -176,25 +174,6 @@ namespace SoundButtons
             return starter.CreateCheckStatusResponse(req, instanceId, true);
         }
 
-        [FunctionName("main-sound-buttons")]
-        public static async Task<bool> RunOrchestrator(
-            [OrchestrationTrigger] IDurableOrchestrationContext context,
-            ILogger log)
-        {
-            Request request = context.GetInput<Request>();
-            if (string.IsNullOrEmpty(request.tempPath))
-            {
-                request.tempPath = await context.CallActivityAsync<string>("ProcessAudioAsync", request.source);
-            }
-
-            // Upload to Blob Storage
-            request = await context.CallActivityAsync<Request>("UploadAudioToStorageAsync", request);
-
-            await context.CallActivityAsync("ProcessJsonFile", request);
-
-            return true;
-        }
-
         private static string ProcessAudioWithFile(IFormFileCollection files, Source source, ILogger log)
         {
 #if DEBUG
@@ -219,6 +198,25 @@ namespace SoundButtons
             return tempPath;
         }
 
+        [FunctionName("main-sound-buttons")]
+        public static async Task<bool> RunOrchestrator(
+            [OrchestrationTrigger] IDurableOrchestrationContext context,
+            ILogger log)
+        {
+            Request request = context.GetInput<Request>();
+            if (string.IsNullOrEmpty(request.tempPath))
+            {
+                request.tempPath = await context.CallActivityAsync<string>("ProcessAudioAsync", request.source);
+            }
+
+            // Upload to Blob Storage
+            request = await context.CallActivityAsync<Request>("UploadAudioToStorageAsync", request);
+
+            await context.CallActivityAsync("ProcessJsonFile", request);
+
+            return true;
+        }
+
         [FunctionName("ProcessAudioAsync")]
         public static async Task<string> ProcessAudioAsync(
             [ActivityTrigger] Source source,
@@ -230,48 +228,33 @@ namespace SoundButtons
 #else
             string tempDir = @"C:\home\data";
 #endif
-            string tempPath = Path.Combine(tempDir, DateTime.Now.Ticks.ToString() + ".tmp");
+            string tempPath = Path.Combine(tempDir, DateTime.Now.Ticks.ToString() + ".webm");
 
             log.LogInformation("TempDir: {tempDir}", tempDir);
 
-            // 設定非同步更新FFmpeg的task
+            var task1 = UpdateFFmpegAsync(tempDir, log);
+            var task2 = UpdateYtdlpAsync(tempDir, log);
+
+            await Task.WhenAll(task1, task2);
+            string youtubeDLPath = task2.Result;
+
+            await DownloadAudioAsync(youtubeDLPath, tempPath, source, log);
+            await CutAudioAsync(tempPath, source, log);
+            return tempPath;
+        }
+
+        private static Task UpdateFFmpegAsync(string tempDir, ILogger log)
+        {
             FFmpeg.SetExecutablesPath(tempDir);
-            Task task = FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official, FFmpeg.ExecutablesPath);
-            //log.LogInformation("FFmpeg Path: {ffmpegPath}", FFmpeg.ExecutablesPath);
+            return FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official,
+                                                     FFmpeg.ExecutablesPath,
+                                                     new Progress<ProgressInfo>(p => log.LogTrace($"{p.DownloadedBytes}/{p.TotalBytes}")));
+        }
 
-            #region 由storage檢查音檔
-            BlobClient sourceBlob = blobContainerClient.GetBlobClient($"AudioSource/{source.videoId}");
-            if (sourceBlob.Exists())
-            {
-                log.LogInformation("Start to download audio source from blob storage {name}", sourceBlob.Name);
-                string sourcePath = Path.Combine(tempDir, DateTime.Now.Ticks.ToString());
-                try
-                {
-                    _ = sourceBlob.DownloadTo(sourcePath);
-
-                    string contentType = sourceBlob.GetProperties().Value.ContentType;
-                    if (contentType.ToLower() == "audio/webm")
-                    {
-                        File.Move(sourcePath, Path.ChangeExtension(sourcePath, "webm"));
-                        sourcePath = Path.ChangeExtension(sourcePath, "webm");
-                    }
-                    else if (contentType.ToLower() == "video/mp4")
-                    {
-                        File.Move(sourcePath, Path.ChangeExtension(sourcePath, "m4a"));
-                        sourcePath = Path.ChangeExtension(sourcePath, "m4a");
-                    }
-
-                    tempPath = await CutAudioAsync(sourcePath, tempPath, source, log);
-                }
-                finally { File.Delete(sourcePath); }
-
-                return tempPath;
-            }
-            #endregion
-
-            #region 由youtube下載音檔
-            string youtubeDLPath = Path.Combine(tempDir, DateTime.Now.Ticks.ToString() + "yt-dlp.exe");
-            try
+        private static async Task<string> UpdateYtdlpAsync(string tempDir, ILogger log)
+        {
+            string youtubeDLPath = Path.Combine(tempDir, DateTime.Now.DayOfYear + "yt-dlp.exe");
+            if (!File.Exists(youtubeDLPath))
             {
                 try
                 {
@@ -291,87 +274,65 @@ namespace SoundButtons
                     if (File.Exists("yt-dlp.exe"))
                         File.Copy("yt-dlp.exe", youtubeDLPath, true);
                 }
-                log.LogInformation("Download youtube-dl.exe at {ytdlPath}", youtubeDLPath);
-
-                OptionSet optionSet = new()
-                {
-                    // 最佳音質
-                    Format = "251",
-                    NoCheckCertificate = true,
-                    Output = tempPath.Replace(".tmp", "_org.%(ext)s")
-                };
-
-                if (File.Exists("aria2c.exe"))
-                {
-                    File.Copy("aria2c.exe", Path.Combine(tempDir, "aria2c.exe"), true);
-                    optionSet.ExternalDownloader = "aria2c";
-                    optionSet.ExternalDownloaderArgs = "-j 16 -s 16 -x 16 -k 1M --retry-wait 10 --max-tries 10";
-                }
-
-                // 下載音訊來源
-                log.LogInformation("Start to download audio source from youtube {videoId}", source.videoId);
-
-                string sourcePath = string.Empty;
-                YoutubeDLProcess youtubeDLProcess = new(youtubeDLPath);
-
-                youtubeDLProcess.OutputReceived += (object sender, System.Diagnostics.DataReceivedEventArgs e) =>
-                {
-                    log.LogInformation(e.Data);
-
-                    // 由console輸出中比對出檔名
-                    Match match = new Regex("Destination: (.*)", RegexOptions.Compiled).Match(e.Data);
-                    if (match.Success)
-                    {
-                        sourcePath = match.Groups[1].ToString().Trim();
-                    }
-                };
-                youtubeDLProcess.ErrorReceived += (object sender, System.Diagnostics.DataReceivedEventArgs e)
-                    => log.LogError(e.Data);
-
-                await Task.WhenAll(task, youtubeDLProcess.RunAsync(
-                    new string[] { @$"https://youtu.be/{source.videoId}" },
-                    optionSet,
-                    new System.Threading.CancellationToken())
-                );
-
-                if (!string.IsNullOrEmpty(sourcePath))
-                {
-                    try
-                    {
-                        tempPath = await CutAudioAsync(sourcePath, tempPath, source, log);
-                    }
-                    finally { File.Delete(sourcePath); }
-                }
-                else { throw new Exception("BadRequest"); }
-                return tempPath;
+                log.LogInformation("Download yt-dlp.exe at {ytdlPath}", youtubeDLPath);
             }
-            finally { File.Delete(youtubeDLPath); }
-            #endregion
+
+            return youtubeDLPath;
         }
 
-        private static async Task<string> CutAudioAsync(string sourcePath, string tempPath, Source source, ILogger log)
+        private static Task<int> DownloadAudioAsync(string youtubeDLPath, string tempPath, Source source, ILogger log)
         {
-            log.LogInformation("Downloaded audio: {sourcePath}", sourcePath);
-            string fileExtension = Path.GetExtension(sourcePath);
-            log.LogInformation("Get extension: {fileExtension}", fileExtension);
-            tempPath = Path.ChangeExtension(tempPath, fileExtension);
+            OptionSet optionSet = new()
+            {
+                // 最佳音質
+                Format = "251",
+                NoCheckCertificate = true,
+                Output = tempPath
+            };
+            optionSet.AddCustomOption("--extractor-args", "youtube:skip=dash");
+            optionSet.AddCustomOption("--download-sections", $"*{source.start}-{source.end}");
+            //optionSet.ExternalDownloader = "ffmpeg";
+            //optionSet.ExternalDownloaderArgs = $"ffmpeg_i:-ss {source.start} -to {source.end}";
 
+            // 下載音訊來源
+            log.LogInformation("Start to download audio source from youtube {videoId}", source.videoId);
+
+            YoutubeDLProcess youtubeDLProcess = new(youtubeDLPath);
+
+            youtubeDLProcess.OutputReceived += (_, e)
+                => log.LogInformation(e.Data);
+            youtubeDLProcess.ErrorReceived += (_, e)
+                => log.LogError(e.Data);
+
+            return youtubeDLProcess.RunAsync(
+                new string[] { @$"https://youtu.be/{source.videoId}" },
+                optionSet,
+                new System.Threading.CancellationToken());
+        }
+
+        private static async Task CutAudioAsync(string tempPath, Source source, ILogger log)
+        {
             // 剪切音檔
             log.LogInformation("Start to cut audio");
-            List<IStream> list = FFmpeg.GetMediaInfo(sourcePath)
-                                       .GetAwaiter()
-                                       .GetResult()
-                                       .AudioStreams
-                                       .Select(audioStream => audioStream.Split(startTime: TimeSpan.FromSeconds(source.start),
-                                                                                duration: TimeSpan.FromSeconds(source.end - source.start))
-                                               as IStream)
-                                       .ToList();
-            IConversion conversion = new Conversion().AddStream(list)
-                                                     .SetOutput(tempPath);
+
+            double duration = source.end - source.start;
+
+            IMediaInfo mediaInfo = await FFmpeg.GetMediaInfo(tempPath);
+            var outputPath = Path.GetTempFileName();
+
+            IConversion conversion = FFmpeg.Conversions.New()
+                                       .AddParameter($"-sseof -{duration}", ParameterPosition.PreInput)
+                                       .AddStream(mediaInfo.Streams)
+                                       .SetOutput(outputPath)
+                                       .SetOverwriteOutput(true);
+            conversion.OnDataReceived += (_, e) => log.LogWarning(e.Data);
+            log.LogDebug("FFmpeg arguments: {arguments}", conversion.Build());
+
             IConversionResult convRes = await conversion.Start();
+            File.Move(outputPath, tempPath, true);
+
             log.LogInformation("Cut audio Finish: {path}", tempPath);
             log.LogInformation("Cut audio Finish in {duration} seconds.", convRes.Duration.TotalSeconds);
-            return tempPath;
         }
 
         [FunctionName("UploadAudioToStorageAsync")]

@@ -18,9 +18,6 @@
     <PackageReference Include="YoutubeDLSharp" Version="0.4.1" />
   </ItemGroup>
   <ItemGroup>
-    <None Update="aria2c.exe">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
     <None Update="host.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
