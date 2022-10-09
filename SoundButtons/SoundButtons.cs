@@ -31,13 +31,6 @@ namespace SoundButtons
                                              [Blob("sound-buttons"), StorageAccount("AzureStorage")] BlobContainerClient BlobContainerClient)
             => await Task.Run(() => { return new OkResult(); });
 
-        [FunctionName("cache-exists")]
-        public static IActionResult CacheExists([HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req,
-                                         ILogger log,
-                                         [Blob("sound-buttons"), StorageAccount("AzureStorage")] BlobContainerClient BlobContainerClient)
-            => new OkObjectResult(req.Query.TryGetValue("id", out var videoId)
-                                  && BlobContainerClient.GetBlobClient($"AudioSource/{videoId}").Exists());
-
         [FunctionName("sound-buttons")]
         public static async Task<IActionResult> HttpStart(
             [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
