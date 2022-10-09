@@ -319,13 +319,17 @@ namespace SoundButtons
 
             IMediaInfo mediaInfo = await FFmpeg.GetMediaInfo(tempPath);
             var outputPath = Path.GetTempFileName();
+            outputPath = Path.ChangeExtension(outputPath, ".webm");
 
             IConversion conversion = FFmpeg.Conversions.New()
                                        .AddParameter($"-sseof -{duration}", ParameterPosition.PreInput)
                                        .AddStream(mediaInfo.Streams)
                                        .SetOutput(outputPath)
                                        .SetOverwriteOutput(true);
-            conversion.OnDataReceived += (_, e) => log.LogWarning(e.Data);
+            conversion.OnProgress += (_, e)
+                => log.LogInformation("Progress: {progress}%", e.Percent);
+            conversion.OnDataReceived += (_, e) 
+                => log.LogWarning(e.Data);
             log.LogDebug("FFmpeg arguments: {arguments}", conversion.Build());
 
             IConversionResult convRes = await conversion.Start();
