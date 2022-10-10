@@ -8,7 +8,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{5F2F3579-8832-4B0E-BAC4-CFBBDC3CABB3}"
 	ProjectSection(SolutionItems) = preProject
 		.github\workflows\master_SoundButtonsEastAsia.yml = .github\workflows\master_SoundButtonsEastAsia.yml
-		SoundButtons\yt-dlp.exe = SoundButtons\yt-dlp.exe
+		README.md = README.md
 	EndProjectSection
 EndProject
 Global
