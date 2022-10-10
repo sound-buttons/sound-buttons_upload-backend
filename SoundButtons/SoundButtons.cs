@@ -354,29 +354,6 @@ namespace SoundButtons
             request.filename = filename;
             log.LogInformation($"Filename: {filename + fileExtension}");
 
-            // // Get a new SAS token for the file
-            // // Check whether this BlobClient object has been authorized with Shared Key.
-            // if (cloudBlockBlob.CanGenerateSasUri)
-            // {
-            //     BlobSasBuilder sasBuilder = new()
-            //     {
-            //         BlobContainerName = cloudBlockBlob.GetParentBlobContainerClient().Name,
-            //         BlobName = cloudBlockBlob.Name,
-            //         Resource = "b",
-            //         Identifier = "永讀"
-            //     };
-
-            //     Uri sasUri = cloudBlockBlob.GenerateSasUri(sasBuilder);
-            //     log.LogInformation($"SAS URI for blob is: {sasUri}");
-
-            //     request.sasContainerToken = sasUri.Query;
-            // }
-            // else
-            // {
-            //     log.LogCritical(@"BlobClient must be authorized with Shared Key 
-            //               credentials to create a service SAS.");
-            // }
-
             try
             {
                 // Write audio file 
@@ -406,7 +383,6 @@ namespace SoundButtons
             Source source = request.source;
             string directory = request.directory;
             string filename = request.filename;
-            // string sasContainerToken = request.sasContainerToken;
             string fileExtension = Path.GetExtension(request.tempPath);
             // Get last json file
             BlobClient jsonBlob = BlobContainerClient.GetBlobClient($"{directory}/{directory}.json");
@@ -455,7 +431,6 @@ namespace SoundButtons
                                        filename + fileExtension,
                                        request,
                                        source
-                                       //    sasContainerToken
                                        );
             byte[] result = JsonSerializer.SerializeToUtf8Bytes<JsonRoot>(
                 json,
@@ -474,7 +449,7 @@ namespace SoundButtons
                                jsonBlob.UploadAsync(new BinaryData(result), option));
         }
 
-        private static JsonRoot UpdateJson(JsonRoot root, string directory, string filename, Request request, Source source/*, string SASToken*/)
+        private static JsonRoot UpdateJson(JsonRoot root, string directory, string filename, Request request, Source source)
         {
             // Variables prepare
             string baseRoute = $"https://soundbuttons.blob.core.windows.net/sound-buttons/{directory}/";
@@ -522,7 +497,6 @@ namespace SoundButtons
                 ),
                 request.volume,
                 source
-            // SASToken
             ));
 
             return root;
@@ -542,7 +516,6 @@ namespace SoundButtons
             public float volume { get; set; }
             public string group { get; set; }
             public string tempPath { get; set; }
-            // public string sasContainerToken { get; set; }
             public string toastId { get; set; }
         }
 
@@ -615,19 +588,17 @@ namespace SoundButtons
                                      : value;
             }
             public Source source { get; set; }
-            // public string SASToken { get; set; }
 
 #pragma warning disable CA2245 // 請勿將屬性指派給屬性自身
             public Button() => this.volume = volume;
 #pragma warning restore CA2245 // 請勿將屬性指派給屬性自身
 
-            public Button(string filename, object text, float volume, Source source/*, string sASToken*/)
+            public Button(string filename, object text, float volume, Source source)
             {
                 this.filename = filename;
                 this.text = text;
                 this.volume = volume;
                 this.source = source;
-                // SASToken = sASToken;
             }
         }
 
