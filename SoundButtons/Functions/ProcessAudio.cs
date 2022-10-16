@@ -137,4 +137,33 @@ public partial class SoundButtons
         log.LogInformation("Cut audio Finish: {path}", tempPath);
         log.LogInformation("Cut audio Finish in {duration} seconds.", convRes.Duration.TotalSeconds);
     }
+
+    private static async Task<string> TranscodeAudioAsync(string tempPath, ILogger log)
+    {
+        log.LogInformation("Start to transcode audio");
+
+        IMediaInfo mediaInfo = await FFmpeg.GetMediaInfo(tempPath);
+        var outputPath = Path.GetTempFileName();
+        outputPath = Path.ChangeExtension(outputPath, ".webm");
+
+        IConversion conversion = FFmpeg.Conversions.New()
+                                   .AddStream(mediaInfo.Streams)
+                                   .SetOutput(outputPath)
+                                   .SetOverwriteOutput(true);
+        conversion.OnProgress += (_, e)
+            => log.LogInformation("Progress: {progress}%", e.Percent);
+        conversion.OnDataReceived += (_, e)
+            => log.LogWarning(e.Data);
+        log.LogDebug("FFmpeg arguments: {arguments}", conversion.Build());
+
+        IConversionResult convRes = await conversion.Start();
+
+        var newPath = Path.ChangeExtension(tempPath, ".webm");
+        File.Move(outputPath, newPath, true);
+
+        log.LogInformation("Transcode audio Finish: {path}", newPath);
+        log.LogInformation("Transcode audio Finish in {duration} seconds.", convRes.Duration.TotalSeconds);
+        return newPath;
+    }
+
 }

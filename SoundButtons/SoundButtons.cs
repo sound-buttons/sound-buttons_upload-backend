@@ -37,7 +37,7 @@ public partial class SoundButtons
         string tempPath = "";
         try
         {
-            tempPath = ProcessAudioFile(req, log, source);
+            tempPath = await ProcessAudioFileAsync(req, log, source);
         }
         catch (Exception)
         {
@@ -169,13 +169,13 @@ public partial class SoundButtons
         return clip;
     }
 
-    private static string ProcessAudioFile(HttpRequest req, ILogger log, Source source)
+    private static async Task<string> ProcessAudioFileAsync(HttpRequest req, ILogger log, Source source)
     {
         IFormFileCollection files = req.Form.Files;
         log.LogInformation("Files Count: {fileCount}", files.Count);
         if (files.Count > 0)
         {
-            return ProcessAudioWithFile(files, source, log);
+            return await ProcessAudioFromFileUpload(files, source, log);
         }
         // source檢核
         else if (string.IsNullOrEmpty(source.videoId)
@@ -188,7 +188,7 @@ public partial class SoundButtons
         return "";
     }
 
-    private static string ProcessAudioWithFile(IFormFileCollection files, Source source, ILogger log)
+    private static async Task<string> ProcessAudioFromFileUpload(IFormFileCollection files, Source source, ILogger log)
     {
 #if DEBUG
         string tempDir = Path.GetTempPath();
@@ -210,7 +210,15 @@ public partial class SoundButtons
             file.CopyTo(fs);
             log.LogInformation("Write file from upload.");
         }
-        return tempPath;
+
+        if (_fileExtension == ".webm")
+        {
+            return tempPath;
+        }
+        else
+        {
+            return await TranscodeAudioAsync(tempPath, log);
+        }
     }
 
     [FunctionName("main-sound-buttons")]
@@ -220,7 +228,7 @@ public partial class SoundButtons
     {
         Request request = context.GetInput<Request>();
 
-        // 若表單有音檔，前一步驟會直接塞入這個路徑
+        // 若表單有音檔，前一步驟會把檔案放入這個路徑
         if (string.IsNullOrEmpty(request.tempPath))
         {
             request.tempPath = await context.CallActivityAsync<string>("ProcessAudioAsync", request.source);

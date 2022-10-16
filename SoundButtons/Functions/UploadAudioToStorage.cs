@@ -39,7 +39,7 @@ public partial class SoundButtons
         {
             // Write audio file 
             log.LogInformation("Start to upload audio to blob storage {name}", blobContainerClient.Name);
-            await cloudBlockBlob.UploadAsync(tempPath, new BlobUploadOptions { HttpHeaders = new BlobHttpHeaders { ContentType = "audio/basic" } });
+            await cloudBlockBlob.UploadAsync(tempPath, new BlobUploadOptions { HttpHeaders = new BlobHttpHeaders { ContentType = "audio/webm" } });
             log.LogInformation("Upload audio to azure finish.");
         }
         finally { File.Delete(tempPath); }
