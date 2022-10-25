@@ -39,8 +39,9 @@ public partial class SoundButtons
         {
             tempPath = await ProcessAudioFileAsync(req, log, source);
         }
-        catch (Exception)
+        catch (Exception e)
         {
+            log.LogError("ProcessAudioFileAsync: {exception}, {message}, {stacktrace}", e, e.Message, e.StackTrace);
             return (ActionResult)new BadRequestResult();
         }
 
