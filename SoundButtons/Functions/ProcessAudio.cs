@@ -140,6 +140,8 @@ public partial class SoundButtons
 
     private static async Task<string> TranscodeAudioAsync(string tempPath, ILogger log)
     {
+        await UpdateFFmpegAsync(Path.GetDirectoryName(tempPath), log);
+
         log.LogInformation("Start to transcode audio");
 
         IMediaInfo mediaInfo = await FFmpeg.GetMediaInfo(tempPath);
