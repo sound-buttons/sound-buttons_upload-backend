@@ -150,6 +150,7 @@ public partial class SoundButtons
 
         IConversion conversion = FFmpeg.Conversions.New()
                                    .AddStream(mediaInfo.Streams)
+                                   .AddParameter("-map 0:a", ParameterPosition.PostInput)
                                    .SetOutput(outputPath)
                                    .SetOverwriteOutput(true);
         conversion.OnProgress += (_, e)
