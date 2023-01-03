@@ -52,31 +52,44 @@ public partial class SoundButtons
 
     private static async Task<string> UpdateYtdlpAsync(string tempDir, ILogger log)
     {
+        bool UseBuiltInYtdlp = bool.Parse(Environment.GetEnvironmentVariable("UseBuiltInYtdlp"));
         string youtubeDLPath = Path.Combine(tempDir, DateTime.Now.DayOfYear + "yt-dlp.exe");
         if (!File.Exists(youtubeDLPath))
         {
-            try
+            if (UseBuiltInYtdlp)
             {
-                // 同步下載youtube-dl.exe (yt-dlp.exe)
-                HttpClient httpClient = new();
-                using HttpResponseMessage response = await httpClient.GetAsync(new Uri(@"https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe").ToString());
-                response.EnsureSuccessStatusCode();
-                using var ms = await response.Content.ReadAsStreamAsync();
-                using var fs = File.Create(youtubeDLPath);
-                ms.Seek(0, SeekOrigin.Begin);
-                await ms.CopyToAsync(fs);
-                await fs.FlushAsync();
+                CopyFallbackYtdlp(youtubeDLPath);
             }
-            catch (Exception)
+            else
             {
-                // Download failed fallback
-                if (File.Exists("yt-dlp.exe"))
-                    File.Copy("yt-dlp.exe", youtubeDLPath, true);
+                try
+                {
+                    // 同步下載youtube-dl.exe (yt-dlp.exe)
+                    HttpClient httpClient = new();
+                    using HttpResponseMessage response = await httpClient.GetAsync(new Uri(@"https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe").ToString());
+                    response.EnsureSuccessStatusCode();
+                    using var ms = await response.Content.ReadAsStreamAsync();
+                    using var fs = File.Create(youtubeDLPath);
+                    ms.Seek(0, SeekOrigin.Begin);
+                    await ms.CopyToAsync(fs);
+                    await fs.FlushAsync();
+                    log.LogInformation("Download yt-dlp.exe at {ytdlPath}", youtubeDLPath);
+                }
+                catch (Exception e)
+                {
+                    log.LogWarning("Cannout download yt-dlp. Fallback to use the built-in yt-dlp.exe. {exception}", e.Message);
+                    CopyFallbackYtdlp(youtubeDLPath);
+                }
             }
-            log.LogInformation("Download yt-dlp.exe at {ytdlPath}", youtubeDLPath);
         }
 
         return youtubeDLPath;
+
+        void CopyFallbackYtdlp(string youtubeDLPath)
+        {
+            File.Copy("yt-dlp.exe", youtubeDLPath, true);
+            log.LogInformation("Use built-in yt-dlp.exe");
+        }
     }
 
     private static Task<int> DownloadAudioAsync(string youtubeDLPath, string tempPath, Source source, ILogger log)
