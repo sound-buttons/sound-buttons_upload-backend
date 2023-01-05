@@ -3,7 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.DurableTask;
 using Microsoft.Azure.WebJobs.Extensions.Http;
-using Microsoft.Extensions.Logging;
+using Serilog;
+using Serilog.Events;
 using SoundButtons.Models;
 using System;
 using System.Collections.Generic;
@@ -17,14 +18,34 @@ namespace SoundButtons;
 
 public partial class SoundButtons
 {
-    internal static string _tempDir = @"C:\home\data\SoundButtons";
+    private readonly ILogger _logger;
+    internal string _tempDir = @"C:\home\data\SoundButtons";
 
     public SoundButtons()
     {
+#if DEBUG
+        Serilog.Debugging.SelfLog.Enable(msg => Console.WriteLine(msg));
+#endif
+
+        _logger = new LoggerConfiguration()
+                        .MinimumLevel.Verbose()
+                        .MinimumLevel.Override("Microsoft", LogEventLevel.Fatal)
+                        .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Fatal)
+                        .MinimumLevel.Override("System", LogEventLevel.Fatal)
+                        .WriteTo.Console(outputTemplate: "{Timestamp:HH:mm:ss} [{Level:u3}] {Message:lj} <{SourceContext}>{NewLine}{Exception}",
+                                         restrictedToMinimumLevel: LogEventLevel.Verbose)
+                        .WriteTo.Seq(serverUrl: Environment.GetEnvironmentVariable("Seq_ServerUrl"),
+                                     apiKey: Environment.GetEnvironmentVariable("Seq_ApiKey"),
+                                     restrictedToMinimumLevel: LogEventLevel.Verbose)
+                        .Enrich.FromLogContext()
+                        .CreateLogger();
+
+        _logger.Debug("Starting up...");
+
         PrepareTempDir();
     }
 
-    public static void PrepareTempDir()
+    public void PrepareTempDir()
     {
 #if DEBUG
         string tempDir = Path.Combine(Path.GetTempPath(), "SoundButtons");
@@ -36,31 +57,30 @@ public partial class SoundButtons
     }
 
     [FunctionName("sound-buttons")]
-    public static async Task<IActionResult> HttpStart(
+    public async Task<IActionResult> HttpStart(
         [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
-        [DurableClient] IDurableOrchestrationClient starter,
-        ILogger log)
+        [DurableClient] IDurableOrchestrationClient starter)
     {
         // 驗證ContentType為multipart/form-data
         string contentType = req.ContentType;
-        log.LogInformation($"Content-Type: {contentType}");
+        _logger.Information($"Content-Type: {contentType}");
         if (!contentType.Contains("multipart/form-data;"))
             return (ActionResult)new BadRequestResult();
 
         if (!req.Form.ContainsKey("nameZH"))
             return (ActionResult)new BadRequestResult();
 
-        Source source = GetSourceInfo(req, log);
-        string clip = await ProcessYoutubeClip(req, log, source);
+        Source source = GetSourceInfo(req);
+        string clip = await ProcessYoutubeClip(req, source);
 
         string tempPath = "";
         try
         {
-            tempPath = await ProcessAudioFileAsync(req, log, source);
+            tempPath = await ProcessAudioFileAsync(req, source);
         }
         catch (Exception e)
         {
-            log.LogError("ProcessAudioFileAsync: {exception}, {message}, {stacktrace}", e, e.Message, e.StackTrace);
+            _logger.Error("ProcessAudioFileAsync: {exception}, {message}, {stacktrace}", e, e.Message, e.StackTrace);
             return (ActionResult)new BadRequestResult();
         }
 
@@ -69,8 +89,7 @@ public partial class SoundButtons
         // 啟動長輪詢
         IActionResult orchestratorResult = await StartOrchestrator(req: req,
                                                                    starter: starter,
-                                                                   log: log,
-                                                                   filename: GetFileName(req, log),
+                                                                   filename: GetFileName(req),
                                                                    directory: req.Form.GetFirstValue("directory") ?? "test",
                                                                    source: source,
                                                                    clip: clip,
@@ -85,7 +104,7 @@ public partial class SoundButtons
         return orchestratorResult;
     }
 
-    private static async Task<IActionResult> StartOrchestrator(HttpRequest req, IDurableOrchestrationClient starter, ILogger log, string filename, string directory, Source source, string clip, string toastId, string tempPath, string ip, string nameZH, string nameJP, float volume, string group)
+    private async Task<IActionResult> StartOrchestrator(HttpRequest req, IDurableOrchestrationClient starter, string filename, string directory, Source source, string clip, string toastId, string tempPath, string ip, string nameZH, string nameJP, float volume, string group)
     {
         string instanceId = await starter.StartNewAsync(
             orchestratorFunctionName: "main-sound-buttons",
@@ -105,23 +124,23 @@ public partial class SoundButtons
                 clip = clip
             });
 
-        log.LogInformation($"Started orchestration with ID = '{instanceId}'.");
+        _logger.Information($"Started orchestration with ID = '{instanceId}'.");
 
         return starter.CreateCheckStatusResponse(req, instanceId, true);
     }
 
-    private static string GetFileName(HttpRequest req, ILogger log)
+    private string GetFileName(HttpRequest req)
     {
         string name = req.Form.GetFirstValue("nameZH"); // 用於回傳
         string filename = name ?? "";
         filename = Regex.Replace(filename, @"[^0-9a-zA-Z\p{L}]+", ""); // 比對通過英數、中日文字等(多位元組字元)
         if (filename.Length == 0)
             filename = Guid.NewGuid().ToString("n");
-        log.LogInformation("FileName: {filename}", filename);
+        _logger.Information("FileName: {filename}", filename);
         return filename;
     }
 
-    private static Source GetSourceInfo(HttpRequest req, ILogger log)
+    private Source GetSourceInfo(HttpRequest req)
     {
         var source = new Source
         {
@@ -151,15 +170,15 @@ public partial class SoundButtons
                 source.videoId = "";
                 source.start = 0;
                 source.end = 0;
-                log.LogError("Discard unknown source: {source}", source.videoId);
+                _logger.Error("Discard unknown source: {source}", source.videoId);
             }
-            log.LogInformation("Get info from form: {videoId}, {start}, {end}", source.videoId, source.start, source.end);
+            _logger.Information("Get info from form: {videoId}, {start}, {end}", source.videoId, source.start, source.end);
         }
 
         return source;
     }
 
-    private static async Task<string> ProcessYoutubeClip(HttpRequest req, ILogger log, Source source)
+    private async Task<string> ProcessYoutubeClip(HttpRequest req, Source source)
     {
         string clip = req.Form.GetFirstValue("clip");
         Regex clipReg = new(@"https?:\/\/(?:[\w-]+\.)?(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/)clip\/[?=&+%\w.-]*");
@@ -183,55 +202,55 @@ public partial class SoundButtons
             Regex reg2 = new(@"{""videoId"":""([\w-]+)""");
             Match match2 = reg2.Match(body);
             source.videoId = match2.Groups[1].Value;
-            log.LogInformation("Get info from clip: {videoId}, {start}, {end}", source.videoId, source.start, source.end);
+            _logger.Information("Get info from clip: {videoId}, {start}, {end}", source.videoId, source.start, source.end);
         }
 
         return clip;
     }
 
-    private static async Task<string> ProcessAudioFileAsync(HttpRequest req, ILogger log, Source source)
+    private async Task<string> ProcessAudioFileAsync(HttpRequest req, Source source)
     {
         IFormFileCollection files = req.Form.Files;
-        log.LogInformation("Files Count: {fileCount}", files.Count);
+        _logger.Information("Files Count: {fileCount}", files.Count);
         if (files.Count > 0)
         {
-            return await ProcessAudioFromFileUpload(files, log);
+            return await ProcessAudioFromFileUpload(files);
         }
         // source檢核
         else if (string.IsNullOrEmpty(source.videoId)
                  || source.end - source.start <= 0
                  || source.end - source.start > 180)
         {
-            log.LogError("video time invalid: {start}, {end}", source.start, source.end);
+            _logger.Error("video time invalid: {start}, {end}", source.start, source.end);
             throw new Exception($"video time invalid: {source.start}, {source.end}");
         }
         return "";
     }
 
-    private static async Task<string> ProcessAudioFromFileUpload(IFormFileCollection files, ILogger log)
+    private async Task<string> ProcessAudioFromFileUpload(IFormFileCollection files)
     {
         string tempPath = Path.Combine(_tempDir, DateTime.Now.Ticks.ToString() + ".tmp");
 
-        log.LogInformation("Get file from form post.");
+        _logger.Information("Get file from form post.");
 
         // 有音檔，直接寫到暫存路徑使用
         IFormFile file = files[0];
         // Get file info
         var _fileExtension = Path.GetExtension(file.FileName) ?? "";
         tempPath = Path.ChangeExtension(tempPath, _fileExtension);
-        log.LogInformation($"Get extension: {_fileExtension}");
+        _logger.Information($"Get extension: {_fileExtension}");
         using (var fs = new FileStream(tempPath, FileMode.OpenOrCreate, FileAccess.Write))
         {
             file.CopyTo(fs);
-            log.LogInformation("Write file from upload.");
+            _logger.Information("Write file from upload.");
         }
 
-        return _fileExtension == ".webm" 
-            ? tempPath 
-            : await TranscodeAudioAsync(tempPath, log);
+        return _fileExtension == ".webm"
+            ? tempPath
+            : await TranscodeAudioAsync(tempPath);
     }
 
-    private static void CleanUp()
+    private void CleanUp()
     {
         var extensions = new HashSet<string>() { ".mp3", ".ytdl", ".webm", ".exe", ".wav", "weba", ".flac" };
         new DirectoryInfo(_tempDir).GetFiles()
@@ -241,9 +260,8 @@ public partial class SoundButtons
     }
 
     [FunctionName("main-sound-buttons")]
-    public static async Task<bool> RunOrchestrator(
-        [OrchestrationTrigger] IDurableOrchestrationContext context,
-        ILogger log)
+    public async Task<bool> RunOrchestrator(
+        [OrchestrationTrigger] IDurableOrchestrationContext context)
     {
         Request request = context.GetInput<Request>();
 
@@ -258,6 +276,7 @@ public partial class SoundButtons
         await context.CallActivityAsync("ProcessJsonFile", request);
 
         CleanUp();
+        _logger.Information("Finish. {filename}", request.nameZH);
 
         return true;
     }

@@ -11,8 +11,7 @@ namespace SoundButtons;
 public partial class SoundButtons
 {
     [FunctionName("wake")]
-    public static async Task<IActionResult> Wake([HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req,
-                                         ILogger log,
+    public async Task<IActionResult> Wake([HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req,
                                          [Blob("sound-buttons"), StorageAccount("AzureStorage")] BlobContainerClient BlobContainerClient)
         => await Task.Run(() => { return new OkResult(); });
 }

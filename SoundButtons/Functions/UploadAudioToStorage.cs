@@ -14,9 +14,8 @@ namespace SoundButtons;
 public partial class SoundButtons
 {
     [FunctionName("UploadAudioToStorageAsync")]
-    public static async Task<Request> UploadAudioToStorageAsync(
+    public async Task<Request> UploadAudioToStorageAsync(
            [ActivityTrigger] Request request,
-           ILogger log,
            [Blob("sound-buttons"), StorageAccount("AzureStorage")] BlobContainerClient blobContainerClient)
     {
         string ip = request.ip;
@@ -33,14 +32,14 @@ public partial class SoundButtons
             cloudBlockBlob = blobContainerClient.GetBlobClient($"{directory}/{filename + fileExtension}");
         }
         request.filename = filename;
-        log.LogInformation($"Filename: {filename + fileExtension}");
+        _logger.Information($"Filename: {filename + fileExtension}");
 
         try
         {
             // Write audio file 
-            log.LogInformation("Start to upload audio to blob storage {name}", blobContainerClient.Name);
+            _logger.Information("Start to upload audio to blob storage {name}", blobContainerClient.Name);
             await cloudBlockBlob.UploadAsync(tempPath, new BlobUploadOptions { HttpHeaders = new BlobHttpHeaders { ContentType = "audio/webm" } });
-            log.LogInformation("Upload audio to azure finish.");
+            _logger.Information("Upload audio to azure finish.");
         }
         finally { File.Delete(tempPath); }
 

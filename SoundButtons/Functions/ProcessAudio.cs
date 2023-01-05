@@ -17,35 +17,34 @@ namespace SoundButtons;
 public partial class SoundButtons
 {
     [FunctionName("ProcessAudioAsync")]
-    public static async Task<string> ProcessAudioAsync(
+    public async Task<string> ProcessAudioAsync(
         [ActivityTrigger] Source source,
-        ILogger log,
         [Blob("sound-buttons"), StorageAccount("AzureStorage")] BlobContainerClient blobContainerClient)
     {
         string tempPath = Path.Combine(_tempDir, DateTime.Now.Ticks.ToString() + ".webm");
 
-        log.LogInformation("TempDir: {tempDir}", _tempDir);
+        _logger.Information("TempDir: {tempDir}", _tempDir);
 
-        var task1 = UpdateFFmpegAsync(_tempDir, log);
-        var task2 = UpdateYtdlpAsync(_tempDir, log);
+        var task1 = UpdateFFmpegAsync(_tempDir);
+        var task2 = UpdateYtdlpAsync(_tempDir);
 
         await Task.WhenAll(task1, task2);
         string youtubeDLPath = task2.Result;
 
-        await DownloadAudioAsync(youtubeDLPath, tempPath, source, log);
-        await CutAudioAsync(tempPath, source, log);
+        await DownloadAudioAsync(youtubeDLPath, tempPath, source);
+        await CutAudioAsync(tempPath, source);
         return tempPath;
     }
 
-    private static Task UpdateFFmpegAsync(string tempDir, ILogger log)
+    private Task UpdateFFmpegAsync(string tempDir)
     {
         FFmpeg.SetExecutablesPath(tempDir);
         return FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official,
                                                  FFmpeg.ExecutablesPath,
-                                                 new Progress<ProgressInfo>(p => log.LogTrace($"{p.DownloadedBytes}/{p.TotalBytes}")));
+                                                 new Progress<ProgressInfo>(p => _logger.Verbose($"{p.DownloadedBytes}/{p.TotalBytes}")));
     }
 
-    private static async Task<string> UpdateYtdlpAsync(string tempDir, ILogger log)
+    private async Task<string> UpdateYtdlpAsync(string tempDir)
     {
         bool useBuiltInYtdlp = bool.Parse(Environment.GetEnvironmentVariable("UseBuiltInYtdlp"));
         string youtubeDLPath = Path.Combine(tempDir, DateTime.Today.Ticks + "yt-dlp.exe");
@@ -65,24 +64,24 @@ public partial class SoundButtons
             ms.Seek(0, SeekOrigin.Begin);
             await ms.CopyToAsync(fs);
             await fs.FlushAsync();
-            log.LogInformation("Download yt-dlp.exe at {ytdlPath}", youtubeDLPath);
+            _logger.Information("Download yt-dlp.exe at {ytdlPath}", youtubeDLPath);
             return youtubeDLPath;
         }
         catch (Exception e)
         {
-            log.LogWarning("Cannot download yt-dlp. {exception}: {exception}", nameof(e), e.Message);
+            _logger.Warning("Cannot download yt-dlp. {exception}: {exception}", nameof(e), e.Message);
             return UseBuiltInYtdlp();
         }
 
         string UseBuiltInYtdlp()
         {
             File.Copy(@"C:\home\site\wwwroot\yt-dlp.exe", youtubeDLPath, true);
-            log.LogInformation("Use built-in yt-dlp.exe");
+            _logger.Information("Use built-in yt-dlp.exe");
             return youtubeDLPath;
         }
     }
 
-    private static Task<int> DownloadAudioAsync(string youtubeDLPath, string tempPath, Source source, ILogger log)
+    private Task<int> DownloadAudioAsync(string youtubeDLPath, string tempPath, Source source)
     {
         OptionSet optionSet = new()
         {
@@ -97,14 +96,14 @@ public partial class SoundButtons
         //optionSet.ExternalDownloaderArgs = $"ffmpeg_i:-ss {source.start} -to {source.end}";
 
         // 下載音訊來源
-        log.LogInformation("Start to download audio source from youtube {videoId}", source.videoId);
+        _logger.Information("Start to download audio source from youtube {videoId}", source.videoId);
 
         YoutubeDLProcess youtubeDLProcess = new(youtubeDLPath);
 
         youtubeDLProcess.OutputReceived += (_, e)
-            => log.LogInformation(e.Data);
+            => _logger.Information(e.Data);
         youtubeDLProcess.ErrorReceived += (_, e)
-            => log.LogError(e.Data);
+            => _logger.Error(e.Data);
 
         return youtubeDLProcess.RunAsync(
             new string[] { @$"https://youtu.be/{source.videoId}" },
@@ -112,10 +111,10 @@ public partial class SoundButtons
             new System.Threading.CancellationToken());
     }
 
-    private static async Task CutAudioAsync(string tempPath, Source source, ILogger log)
+    private async Task CutAudioAsync(string tempPath, Source source)
     {
         // 剪切音檔
-        log.LogInformation("Start to cut audio");
+        _logger.Information("Start to cut audio");
 
         double duration = source.end - source.start;
 
@@ -129,23 +128,23 @@ public partial class SoundButtons
                                    .SetOutput(outputPath)
                                    .SetOverwriteOutput(true);
         conversion.OnProgress += (_, e)
-            => log.LogInformation("Progress: {progress}%", e.Percent);
+            => _logger.Information("Progress: {progress}%", e.Percent);
         conversion.OnDataReceived += (_, e)
-            => log.LogWarning(e.Data);
-        log.LogDebug("FFmpeg arguments: {arguments}", conversion.Build());
+            => _logger.Warning(e.Data);
+        _logger.Debug("FFmpeg arguments: {arguments}", conversion.Build());
 
         IConversionResult convRes = await conversion.Start();
         File.Move(outputPath, tempPath, true);
 
-        log.LogInformation("Cut audio Finish: {path}", tempPath);
-        log.LogInformation("Cut audio Finish in {duration} seconds.", convRes.Duration.TotalSeconds);
+        _logger.Information("Cut audio Finish: {path}", tempPath);
+        _logger.Information("Cut audio Finish in {duration} seconds.", convRes.Duration.TotalSeconds);
     }
 
-    private static async Task<string> TranscodeAudioAsync(string tempPath, ILogger log)
+    private async Task<string> TranscodeAudioAsync(string tempPath)
     {
-        await UpdateFFmpegAsync(Path.GetDirectoryName(tempPath), log);
+        await UpdateFFmpegAsync(Path.GetDirectoryName(tempPath));
 
-        log.LogInformation("Start to transcode audio");
+        _logger.Information("Start to transcode audio");
 
         IMediaInfo mediaInfo = await FFmpeg.GetMediaInfo(tempPath);
         var outputPath = Path.GetTempFileName();
@@ -157,18 +156,18 @@ public partial class SoundButtons
                                    .SetOutput(outputPath)
                                    .SetOverwriteOutput(true);
         conversion.OnProgress += (_, e)
-            => log.LogInformation("Progress: {progress}%", e.Percent);
+            => _logger.Information("Progress: {progress}%", e.Percent);
         conversion.OnDataReceived += (_, e)
-            => log.LogWarning(e.Data);
-        log.LogDebug("FFmpeg arguments: {arguments}", conversion.Build());
+            => _logger.Warning(e.Data);
+        _logger.Debug("FFmpeg arguments: {arguments}", conversion.Build());
 
         IConversionResult convRes = await conversion.Start();
 
         var newPath = Path.ChangeExtension(tempPath, ".webm");
         File.Move(outputPath, newPath, true);
 
-        log.LogInformation("Transcode audio Finish: {path}", newPath);
-        log.LogInformation("Transcode audio Finish in {duration} seconds.", convRes.Duration.TotalSeconds);
+        _logger.Information("Transcode audio Finish: {path}", newPath);
+        _logger.Information("Transcode audio Finish in {duration} seconds.", convRes.Duration.TotalSeconds);
         return newPath;
     }
 
