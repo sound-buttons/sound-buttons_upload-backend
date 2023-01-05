@@ -22,17 +22,12 @@ public partial class SoundButtons
         ILogger log,
         [Blob("sound-buttons"), StorageAccount("AzureStorage")] BlobContainerClient blobContainerClient)
     {
-#if DEBUG
-        string tempDir = Path.GetTempPath();
-#else
-        string tempDir = @"C:\home\data";
-#endif
-        string tempPath = Path.Combine(tempDir, DateTime.Now.Ticks.ToString() + ".webm");
+        string tempPath = Path.Combine(_tempDir, DateTime.Now.Ticks.ToString() + ".webm");
 
-        log.LogInformation("TempDir: {tempDir}", tempDir);
+        log.LogInformation("TempDir: {tempDir}", _tempDir);
 
-        var task1 = UpdateFFmpegAsync(tempDir, log);
-        var task2 = UpdateYtdlpAsync(tempDir, log);
+        var task1 = UpdateFFmpegAsync(_tempDir, log);
+        var task2 = UpdateYtdlpAsync(_tempDir, log);
 
         await Task.WhenAll(task1, task2);
         string youtubeDLPath = task2.Result;
@@ -52,43 +47,38 @@ public partial class SoundButtons
 
     private static async Task<string> UpdateYtdlpAsync(string tempDir, ILogger log)
     {
-        bool UseBuiltInYtdlp = bool.Parse(Environment.GetEnvironmentVariable("UseBuiltInYtdlp"));
-        string youtubeDLPath = Path.Combine(tempDir, DateTime.Now.DayOfYear + "yt-dlp.exe");
-        if (!File.Exists(youtubeDLPath))
+        bool useBuiltInYtdlp = bool.Parse(Environment.GetEnvironmentVariable("UseBuiltInYtdlp"));
+        string youtubeDLPath = Path.Combine(tempDir, DateTime.Today.Ticks + "yt-dlp.exe");
+
+        if (useBuiltInYtdlp) return UseBuiltInYtdlp();
+
+        if (File.Exists(youtubeDLPath)) return youtubeDLPath;
+
+        try
         {
-            if (UseBuiltInYtdlp)
-            {
-                CopyFallbackYtdlp(youtubeDLPath);
-            }
-            else
-            {
-                try
-                {
-                    // 同步下載youtube-dl.exe (yt-dlp.exe)
-                    HttpClient httpClient = new();
-                    using HttpResponseMessage response = await httpClient.GetAsync(new Uri(@"https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe").ToString());
-                    response.EnsureSuccessStatusCode();
-                    using var ms = await response.Content.ReadAsStreamAsync();
-                    using var fs = File.Create(youtubeDLPath);
-                    ms.Seek(0, SeekOrigin.Begin);
-                    await ms.CopyToAsync(fs);
-                    await fs.FlushAsync();
-                    log.LogInformation("Download yt-dlp.exe at {ytdlPath}", youtubeDLPath);
-                }
-                catch (Exception e)
-                {
-                    log.LogWarning("Cannout download yt-dlp. Fallback to use the built-in yt-dlp.exe. {exception}", e.Message);
-                    CopyFallbackYtdlp(youtubeDLPath);
-                }
-            }
+            // 同步下載youtube-dl.exe (yt-dlp.exe)
+            HttpClient httpClient = new();
+            using HttpResponseMessage response = await httpClient.GetAsync(new Uri(@"https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe").ToString());
+            response.EnsureSuccessStatusCode();
+            using var ms = await response.Content.ReadAsStreamAsync();
+            using var fs = File.Create(youtubeDLPath);
+            ms.Seek(0, SeekOrigin.Begin);
+            await ms.CopyToAsync(fs);
+            await fs.FlushAsync();
+            log.LogInformation("Download yt-dlp.exe at {ytdlPath}", youtubeDLPath);
+            return youtubeDLPath;
+        }
+        catch (Exception e)
+        {
+            log.LogWarning("Cannot download yt-dlp. {exception}: {exception}", nameof(e), e.Message);
+            return UseBuiltInYtdlp();
         }
 
-        return youtubeDLPath;
-
-        void CopyFallbackYtdlp(string youtubeDLPath)
+        string UseBuiltInYtdlp()
         {
-            File.Copy("yt-dlp.exe", youtubeDLPath, true);
+            File.Copy(@"C:\home\site\wwwroot\yt-dlp.exe", youtubeDLPath, true);
             log.LogInformation("Use built-in yt-dlp.exe");
+            return youtubeDLPath;
         }
     }
 

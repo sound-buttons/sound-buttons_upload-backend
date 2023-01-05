@@ -6,6 +6,7 @@ using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Extensions.Logging;
 using SoundButtons.Models;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -16,6 +17,24 @@ namespace SoundButtons;
 
 public partial class SoundButtons
 {
+    internal static string _tempDir = @"C:\home\data\SoundButtons";
+
+    public SoundButtons()
+    {
+        PrepareTempDir();
+    }
+
+    public static void PrepareTempDir()
+    {
+#if DEBUG
+        string tempDir = Path.Combine(Path.GetTempPath(), "SoundButtons");
+#else
+        string tempDir = _tempDir;
+#endif
+        Directory.CreateDirectory(tempDir); // For safety
+        _tempDir = tempDir;
+    }
+
     [FunctionName("sound-buttons")]
     public static async Task<IActionResult> HttpStart(
         [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
@@ -176,7 +195,7 @@ public partial class SoundButtons
         log.LogInformation("Files Count: {fileCount}", files.Count);
         if (files.Count > 0)
         {
-            return await ProcessAudioFromFileUpload(files, source, log);
+            return await ProcessAudioFromFileUpload(files, log);
         }
         // source檢核
         else if (string.IsNullOrEmpty(source.videoId)
@@ -189,14 +208,9 @@ public partial class SoundButtons
         return "";
     }
 
-    private static async Task<string> ProcessAudioFromFileUpload(IFormFileCollection files, Source source, ILogger log)
+    private static async Task<string> ProcessAudioFromFileUpload(IFormFileCollection files, ILogger log)
     {
-#if DEBUG
-        string tempDir = Path.GetTempPath();
-#else
-        string tempDir = @"C:\home\data";
-#endif
-        string tempPath = Path.Combine(tempDir, DateTime.Now.Ticks.ToString() + ".tmp");
+        string tempPath = Path.Combine(_tempDir, DateTime.Now.Ticks.ToString() + ".tmp");
 
         log.LogInformation("Get file from form post.");
 
@@ -212,14 +226,18 @@ public partial class SoundButtons
             log.LogInformation("Write file from upload.");
         }
 
-        if (_fileExtension == ".webm")
-        {
-            return tempPath;
-        }
-        else
-        {
-            return await TranscodeAudioAsync(tempPath, log);
-        }
+        return _fileExtension == ".webm" 
+            ? tempPath 
+            : await TranscodeAudioAsync(tempPath, log);
+    }
+
+    private static void CleanUp()
+    {
+        var extensions = new HashSet<string>() { ".mp3", ".ytdl", ".webm", ".exe", ".wav", "weba", ".flac" };
+        new DirectoryInfo(_tempDir).GetFiles()
+                                   .Where(p => extensions.Contains(p.Extension))
+                                   .ToList()
+                                   .ForEach(p => p.Delete());
     }
 
     [FunctionName("main-sound-buttons")]
@@ -238,6 +256,8 @@ public partial class SoundButtons
         request = await context.CallActivityAsync<Request>("UploadAudioToStorageAsync", request);
 
         await context.CallActivityAsync("ProcessJsonFile", request);
+
+        CleanUp();
 
         return true;
     }
