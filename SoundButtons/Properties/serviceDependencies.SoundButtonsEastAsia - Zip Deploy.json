@@ -1,10 +1,14 @@
 {
   "dependencies": {
     "storage1": {
-      "secretStore": "AzureAppSettings",
       "resourceId": "/subscriptions/[parameters('subscriptionId')]/resourceGroups/[parameters('resourceGroupName')]/providers/Microsoft.Storage/storageAccounts/soundbuttons",
       "type": "storage.azure",
       "connectionId": "AzureStorage"
+    },
+    "storage2": {
+      "resourceId": "/subscriptions/[parameters('subscriptionId')]/resourceGroups/[parameters('resourceGroupName')]/providers/Microsoft.Storage/storageAccounts/soundbuttons",
+      "type": "storage.azure",
+      "connectionId": "AzureWebJobsStorage"
     }
   }
 }

@@ -3,6 +3,10 @@
     "storage1": {
       "type": "storage",
       "connectionId": "AzureStorage"
+    },
+    "storage2": {
+      "type": "storage",
+      "connectionId": "AzureWebJobsStorage"
     }
   }
 }
