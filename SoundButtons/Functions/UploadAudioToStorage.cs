@@ -36,14 +36,10 @@ public partial class SoundButtons
         request.filename = filename;
         _logger.Information($"Filename: {filename + fileExtension}");
 
-        try
-        {
-            // Write audio file 
-            _logger.Information("Start to upload audio to blob storage {name}", blobContainerClient.Name);
-            await cloudBlockBlob.UploadAsync(tempPath, new BlobUploadOptions { HttpHeaders = new BlobHttpHeaders { ContentType = "audio/webm" } });
-            _logger.Information("Upload audio to azure finish.");
-        }
-        finally { File.Delete(tempPath); }
+        // Write audio file 
+        _logger.Information("Start to upload audio to blob storage {name}", blobContainerClient.Name);
+        await cloudBlockBlob.UploadAsync(tempPath, new BlobUploadOptions { HttpHeaders = new BlobHttpHeaders { ContentType = "audio/webm" } });
+        _logger.Information("Upload audio to azure finish.");
 
         if (null != ip)
         {

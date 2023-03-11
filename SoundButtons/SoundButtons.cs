@@ -269,23 +269,8 @@ public partial class SoundButtons
         }
 
 
-        var UploadAudioToStorageTask = context.CallActivityAsync<Request>("UploadAudioToStorageAsync", request);
-        UploadAudioToStorageTask.Start();
-
-        if (string.IsNullOrEmpty(request.nameJP))
-        {
-            var speechToText = await new OpenAIService().SpeechToTextAsync(request.tempPath);
-
-            request = await UploadAudioToStorageTask;
-            if (speechToText.Language?.ToLower() == "japanese")
-            {
-                request.nameJP = speechToText.Text;
-            }
-        }
-        else
-        {
-            request = await UploadAudioToStorageTask;
-        }
+        request = await context.CallActivityAsync<Request>("UploadAudioToStorageAsync", request);
+        request = await context.CallActivityAsync<Request>("SpeechToTextAsync", request);
 
         await context.CallActivityAsync("ProcessJsonFile", request);
 

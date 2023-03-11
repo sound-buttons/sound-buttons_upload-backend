@@ -26,7 +26,7 @@ internal class OpenAIService
     {
         if (!CheckApiKey()) return new();
 
-        using var fileStream = new FileStream(path, FileMode.Open, FileAccess.Read);
+        using var fileStream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
         using var content = new MultipartFormDataContent
         {
             { new StreamContent(fileStream), "file", Path.GetFileName(path) },
