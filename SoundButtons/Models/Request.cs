@@ -13,4 +13,5 @@ public class Request
     public string group { get; set; }
     public string tempPath { get; set; }
     public string toastId { get; set; }
+    public object instanceId { get; internal set; }
 }

@@ -4,10 +4,10 @@ using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.DurableTask;
 using Microsoft.Azure.WebJobs.Extensions.Http;
 using Serilog;
+using Serilog.Context;
 using Serilog.Events;
 using SoundButtons.Models;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -40,7 +40,7 @@ public partial class SoundButtons
                         .Enrich.FromLogContext()
                         .CreateLogger();
 
-        _logger.Debug("Starting up...");
+        //_logger.Debug("Starting up...");
 
         PrepareTempDir();
     }
@@ -106,9 +106,10 @@ public partial class SoundButtons
 
     private async Task<IActionResult> StartOrchestrator(HttpRequest req, IDurableOrchestrationClient starter, string filename, string directory, Source source, string clip, string toastId, string tempPath, string ip, string nameZH, string nameJP, float volume, string group)
     {
-        string instanceId = await starter.StartNewAsync(
+        string instanceId = Guid.NewGuid().ToString();
+        await starter.StartNewAsync(
             orchestratorFunctionName: "main-sound-buttons",
-            instanceId: null,
+            instanceId: instanceId,
             input: new Request()
             {
                 directory = directory,
@@ -121,7 +122,8 @@ public partial class SoundButtons
                 volume = volume,
                 tempPath = tempPath,
                 toastId = toastId,
-                clip = clip
+                clip = clip,
+                instanceId = instanceId
             });
 
         _logger.Information($"Started orchestration with ID = '{instanceId}'.");
@@ -264,11 +266,12 @@ public partial class SoundButtons
         [OrchestrationTrigger] IDurableOrchestrationContext context)
     {
         Request request = context.GetInput<Request>();
+        using var _ = LogContext.PushProperty("InstanceId", request.instanceId);
 
         // 若表單有音檔，前一步驟會把檔案放入這個路徑
         if (string.IsNullOrEmpty(request.tempPath))
         {
-            request.tempPath = await context.CallActivityAsync<string>("ProcessAudioAsync", request.source);
+            request.tempPath = await context.CallActivityAsync<string>("ProcessAudioAsync", request);
         }
 
         request = await context.CallActivityAsync<Request>("UploadAudioToStorageAsync", request);

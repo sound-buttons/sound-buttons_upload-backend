@@ -1,7 +1,7 @@
 ﻿using Azure.Storage.Blobs;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.DurableTask;
-using Microsoft.Extensions.Logging;
+using Serilog.Context;
 using SoundButtons.Models;
 using System;
 using System.IO;
@@ -18,9 +18,10 @@ public partial class SoundButtons
 {
     [FunctionName("ProcessAudioAsync")]
     public async Task<string> ProcessAudioAsync(
-        [ActivityTrigger] Source source,
+        [ActivityTrigger] Request request,
         [Blob("sound-buttons"), StorageAccount("AzureStorage")] BlobContainerClient blobContainerClient)
     {
+        using var _ = LogContext.PushProperty("InstanceId", request.instanceId);
         string tempPath = Path.Combine(_tempDir, DateTime.Now.Ticks.ToString() + ".webm");
 
         _logger.Information("TempDir: {tempDir}", _tempDir);
@@ -31,23 +32,22 @@ public partial class SoundButtons
         await Task.WhenAll(task1, task2);
         string youtubeDLPath = task2.Result;
 
-        await DownloadAudioAsync(youtubeDLPath, tempPath, source);
-        await CutAudioAsync(tempPath, source);
+        await DownloadAudioAsync(youtubeDLPath, tempPath, request.source);
+        await CutAudioAsync(tempPath, request.source);
         return tempPath;
     }
 
-    private Task UpdateFFmpegAsync(string tempDir)
+    private static Task UpdateFFmpegAsync(string tempDir)
     {
         FFmpeg.SetExecutablesPath(tempDir);
         return FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official,
-                                                 FFmpeg.ExecutablesPath,
-                                                 new Progress<ProgressInfo>(p => _logger.Verbose($"{p.DownloadedBytes}/{p.TotalBytes}")));
+                                                 FFmpeg.ExecutablesPath);
     }
 
     private async Task<string> UpdateYtdlpAsync(string tempDir)
     {
         bool useBuiltInYtdlp = bool.Parse(Environment.GetEnvironmentVariable("UseBuiltInYtdlp"));
-        string youtubeDLPath = Path.Combine(tempDir, DateTime.Today.Ticks + "yt-dlp.exe");
+        string youtubeDLPath = Path.Combine(tempDir, "yt-dlp.exe");
 
         if (useBuiltInYtdlp) return UseBuiltInYtdlp();
 
@@ -101,9 +101,10 @@ public partial class SoundButtons
         YoutubeDLProcess youtubeDLProcess = new(youtubeDLPath);
 
         youtubeDLProcess.OutputReceived += (_, e)
-            => _logger.Information(e.Data);
+            => _logger.Verbose(e.Data);
         youtubeDLProcess.ErrorReceived += (_, e)
-            => _logger.Error(e.Data);
+            => _logger.Verbose(e.Data);
+        _logger.Debug("yt-dlp arguments: {arguments}", optionSet.ToString());
 
         return youtubeDLProcess.RunAsync(
             new string[] { @$"https://youtu.be/{source.videoId}" },
@@ -128,9 +129,9 @@ public partial class SoundButtons
                                    .SetOutput(outputPath)
                                    .SetOverwriteOutput(true);
         conversion.OnProgress += (_, e)
-            => _logger.Information("Progress: {progress}%", e.Percent);
+            => _logger.Verbose("Progress: {progress}%", e.Percent);
         conversion.OnDataReceived += (_, e)
-            => _logger.Warning(e.Data);
+            => _logger.Verbose(e.Data);
         _logger.Debug("FFmpeg arguments: {arguments}", conversion.Build());
 
         IConversionResult convRes = await conversion.Start();
@@ -156,9 +157,9 @@ public partial class SoundButtons
                                    .SetOutput(outputPath)
                                    .SetOverwriteOutput(true);
         conversion.OnProgress += (_, e)
-            => _logger.Information("Progress: {progress}%", e.Percent);
+            => _logger.Verbose("Progress: {progress}%", e.Percent);
         conversion.OnDataReceived += (_, e)
-            => _logger.Warning(e.Data);
+            => _logger.Verbose(e.Data);
         _logger.Debug("FFmpeg arguments: {arguments}", conversion.Build());
 
         IConversionResult convRes = await conversion.Start();
