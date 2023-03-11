@@ -22,12 +22,13 @@ public partial class SoundButtons
         [Blob("sound-buttons"), StorageAccount("AzureStorage")] BlobContainerClient blobContainerClient)
     {
         using var _ = LogContext.PushProperty("InstanceId", request.instanceId);
-        string tempPath = Path.Combine(_tempDir, DateTime.Now.Ticks.ToString() + ".webm");
+        var tempDir = PrepareTempDir();
+        string tempPath = Path.Combine(tempDir, DateTime.Now.Ticks.ToString() + ".webm");
 
-        _logger.Information("TempDir: {tempDir}", _tempDir);
+        _logger.Information("TempDir: {tempDir}", tempDir);
 
-        var task1 = UpdateFFmpegAsync(_tempDir);
-        var task2 = UpdateYtdlpAsync(_tempDir);
+        var task1 = UpdateFFmpegAsync(tempDir);
+        var task2 = UpdateYtdlpAsync(tempDir);
 
         await Task.WhenAll(task1, task2);
         string youtubeDLPath = task2.Result;

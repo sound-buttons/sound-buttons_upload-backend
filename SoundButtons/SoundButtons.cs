@@ -19,7 +19,6 @@ namespace SoundButtons;
 public partial class SoundButtons
 {
     private readonly ILogger _logger;
-    internal string _tempDir = @"C:\home\data\";
 
     public SoundButtons()
     {
@@ -43,14 +42,16 @@ public partial class SoundButtons
         //_logger.Debug("Starting up...");
     }
 
-    public void PrepareTempDir()
+    public static string PrepareTempDir()
     {
 #if DEBUG
-        _tempDir = Path.GetTempPath();
+        var _tempDir = Path.GetTempPath();
+#else
+        var _tempDir = @"C:\home\data\";
 #endif
         string tempDir = Path.Combine(_tempDir, "SoundButtons", new DateTimeOffset(DateTime.UtcNow).ToUnixTimeSeconds().ToString());
         Directory.CreateDirectory(tempDir); // For safety
-        _tempDir = tempDir;
+        return tempDir;
     }
 
     [FunctionName("sound-buttons")]
@@ -58,16 +59,14 @@ public partial class SoundButtons
         [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
         [DurableClient] IDurableOrchestrationClient starter)
     {
-        PrepareTempDir();
-
         // 驗證ContentType為multipart/form-data
         string contentType = req.ContentType;
         _logger.Information($"Content-Type: {contentType}");
         if (!contentType.Contains("multipart/form-data;"))
-            return (ActionResult)new BadRequestResult();
+            return new BadRequestResult();
 
         if (!req.Form.ContainsKey("nameZH"))
-            return (ActionResult)new BadRequestResult();
+            return new BadRequestResult();
 
         Source source = GetSourceInfo(req);
         string clip = await ProcessYoutubeClip(req, source);
@@ -80,7 +79,7 @@ public partial class SoundButtons
         catch (Exception e)
         {
             _logger.Error("ProcessAudioFileAsync: {exception}, {message}, {stacktrace}", e, e.Message, e.StackTrace);
-            return (ActionResult)new BadRequestResult();
+            return new BadRequestResult();
         }
 
         if (!float.TryParse(req.Form.GetFirstValue("volume"), out float volume)) { volume = 1; }
@@ -230,7 +229,8 @@ public partial class SoundButtons
 
     private async Task<string> ProcessAudioFromFileUpload(IFormFileCollection files)
     {
-        string tempPath = Path.Combine(_tempDir, DateTime.Now.Ticks.ToString() + ".tmp");
+        var tempDir = PrepareTempDir();
+        string tempPath = Path.Combine(tempDir, DateTime.Now.Ticks.ToString() + ".tmp");
 
         _logger.Information("Get file from form post.");
 
@@ -251,7 +251,8 @@ public partial class SoundButtons
             : await TranscodeAudioAsync(tempPath);
     }
 
-    private void CleanUp() => Directory.Delete(_tempDir, true);
+    private static void CleanUp(string tempPath) 
+        => Directory.Delete(Path.GetDirectoryName(tempPath), true);
 
     [FunctionName("main-sound-buttons")]
     public async Task<bool> RunOrchestrator(
@@ -270,7 +271,7 @@ public partial class SoundButtons
 
         await context.CallActivityAsync("ProcessJsonFile", request);
 
-        CleanUp();
+        CleanUp(request.tempPath);
         _logger.Information("Finish. {filename}", request.nameZH);
 
         return true;
