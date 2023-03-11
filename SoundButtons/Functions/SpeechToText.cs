@@ -12,15 +12,21 @@ namespace SoundButtons.Functions
         public static async Task<Request> SpeechToTextAsync(
             [ActivityTrigger] Request request)
         {
+            var openAIService = new OpenAIService();
             if (string.IsNullOrEmpty(request.nameJP))
             {
-                var speechToText = await new OpenAIService().SpeechToTextAsync(request.tempPath);
+                var speechToTextJP = await openAIService.SpeechToTextAsync(request.tempPath, "ja");
 
-                if (speechToText.Language?.ToLower() == "japanese")
-                {
-                    request.nameJP = speechToText.Text;
-                }
+                request.nameJP = speechToTextJP.Text;
             }
+
+            if (string.IsNullOrEmpty(request.nameZH))
+            {
+                var speechToTextZH = await openAIService.SpeechToTextAsync(request.tempPath, "zh");
+
+                request.nameZH = speechToTextZH.Text;
+            }
+
             return request;
         }
     }

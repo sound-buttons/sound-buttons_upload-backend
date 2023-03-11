@@ -7,7 +7,6 @@ using Serilog;
 using Serilog.Context;
 using Serilog.Events;
 using SoundButtons.Models;
-using SoundButtons.Services;
 using System;
 using System.IO;
 using System.Linq;
@@ -64,9 +63,6 @@ public partial class SoundButtons
         string contentType = req.ContentType;
         _logger.Information($"Content-Type: {contentType}");
         if (!contentType.Contains("multipart/form-data;"))
-            return new BadRequestResult();
-
-        if (!req.Form.ContainsKey("nameZH"))
             return new BadRequestResult();
 
         Source source = GetSourceInfo(req);

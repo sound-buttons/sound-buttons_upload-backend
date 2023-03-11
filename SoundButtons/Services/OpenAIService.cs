@@ -22,7 +22,7 @@ internal class OpenAIService
         _apiKey = Environment.GetEnvironmentVariable("OpenAI_ApiKey");
     }
 
-    public async Task<TranscriptionsResponse> SpeechToTextAsync(string path)
+    public async Task<TranscriptionsResponse> SpeechToTextAsync(string path, string language = "")
     {
         if (!CheckApiKey()) return new();
 
@@ -35,6 +35,11 @@ internal class OpenAIService
             { new StringContent("verbose_json"), "response_format" },
             { new StringContent("0.1"), "temperature" }
         };
+
+        if (!string.IsNullOrEmpty(language))
+        {
+            content.Add(new StringContent(language), "language");
+        }
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "audio/transcriptions");
         request.Headers.Add("Accept", "application/json");
