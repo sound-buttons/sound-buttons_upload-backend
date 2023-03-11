@@ -7,6 +7,7 @@ using Serilog;
 using Serilog.Context;
 using Serilog.Events;
 using SoundButtons.Models;
+using SoundButtons.Services;
 using System;
 using System.IO;
 using System.Linq;
@@ -251,7 +252,7 @@ public partial class SoundButtons
             : await TranscodeAudioAsync(tempPath);
     }
 
-    private static void CleanUp(string tempPath) 
+    private static void CleanUp(string tempPath)
         => Directory.Delete(Path.GetDirectoryName(tempPath), true);
 
     [FunctionName("main-sound-buttons")]
@@ -267,7 +268,24 @@ public partial class SoundButtons
             request.tempPath = await context.CallActivityAsync<string>("ProcessAudioAsync", request);
         }
 
-        request = await context.CallActivityAsync<Request>("UploadAudioToStorageAsync", request);
+
+        var UploadAudioToStorageTask = context.CallActivityAsync<Request>("UploadAudioToStorageAsync", request);
+        UploadAudioToStorageTask.Start();
+
+        if (string.IsNullOrEmpty(request.nameJP))
+        {
+            var speechToText = await new OpenAIService().SpeechToTextAsync(request.tempPath);
+
+            request = await UploadAudioToStorageTask;
+            if (speechToText.Language?.ToLower() == "japanese")
+            {
+                request.nameJP = speechToText.Text;
+            }
+        }
+        else
+        {
+            request = await UploadAudioToStorageTask;
+        }
 
         await context.CallActivityAsync("ProcessJsonFile", request);
 

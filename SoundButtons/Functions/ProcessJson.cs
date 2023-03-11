@@ -2,7 +2,6 @@
 using Azure.Storage.Blobs.Models;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.DurableTask;
-using Microsoft.Extensions.Logging;
 using Serilog.Context;
 using SoundButtons.Models;
 using System;
