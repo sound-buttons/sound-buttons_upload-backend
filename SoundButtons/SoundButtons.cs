@@ -19,7 +19,7 @@ namespace SoundButtons;
 public partial class SoundButtons
 {
     private readonly ILogger _logger;
-    internal string _tempDir = @"C:\home\data\SoundButtons";
+    internal string _tempDir = @"C:\home\data\";
 
     public SoundButtons()
     {
@@ -41,17 +41,14 @@ public partial class SoundButtons
                         .CreateLogger();
 
         //_logger.Debug("Starting up...");
-
-        PrepareTempDir();
     }
 
     public void PrepareTempDir()
     {
 #if DEBUG
-        string tempDir = Path.Combine(Path.GetTempPath(), "SoundButtons");
-#else
-        string tempDir = _tempDir;
+        _tempDir = Path.GetTempPath();
 #endif
+        string tempDir = Path.Combine(_tempDir, "SoundButtons", new DateTimeOffset(DateTime.UtcNow).ToUnixTimeSeconds().ToString());
         Directory.CreateDirectory(tempDir); // For safety
         _tempDir = tempDir;
     }
@@ -61,6 +58,8 @@ public partial class SoundButtons
         [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
         [DurableClient] IDurableOrchestrationClient starter)
     {
+        PrepareTempDir();
+
         // 驗證ContentType為multipart/form-data
         string contentType = req.ContentType;
         _logger.Information($"Content-Type: {contentType}");
@@ -252,14 +251,7 @@ public partial class SoundButtons
             : await TranscodeAudioAsync(tempPath);
     }
 
-    private void CleanUp()
-    {
-        var extensions = new HashSet<string>() { ".mp3", ".ytdl", ".webm", ".exe", ".wav", "weba", ".flac" };
-        new DirectoryInfo(_tempDir).GetFiles()
-                                   .Where(p => extensions.Contains(p.Extension))
-                                   .ToList()
-                                   .ForEach(p => p.Delete());
-    }
+    private void CleanUp() => Directory.Delete(_tempDir, true);
 
     [FunctionName("main-sound-buttons")]
     public async Task<bool> RunOrchestrator(
