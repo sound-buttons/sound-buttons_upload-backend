@@ -2,6 +2,7 @@
 using Azure.Storage.Blobs.Models;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.DurableTask;
+using Serilog;
 using Serilog.Context;
 using SoundButtons.Models;
 using System;
@@ -11,10 +12,12 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace SoundButtons;
+namespace SoundButtons.Functions;
 
-public partial class SoundButtons
+public class ProcessJson
 {
+    private static ILogger Logger => Helper.Log.Logger;
+
     [FunctionName("ProcessJsonFile")]
     public async Task ProcessJsonFile(
     [ActivityTrigger] Request request,
@@ -29,10 +32,10 @@ public partial class SoundButtons
         BlobClient jsonBlob = BlobContainerClient.GetBlobClient($"{directory}/{directory}.json");
         if (!jsonBlob.Exists().Value)
         {
-            _logger.Fatal("{jsonFile} not found!!", jsonBlob.Name);
+            Logger.Fatal("{jsonFile} not found!!", jsonBlob.Name);
             return;
         }
-        _logger.Information("Read Json file {name}", jsonBlob.Name);
+        Logger.Information("Read Json file {name}", jsonBlob.Name);
 
         JsonRoot root;
         // Read last json file
@@ -44,7 +47,7 @@ public partial class SoundButtons
             }
             catch (OutOfMemoryException)
             {
-                _logger.Error("System.OutOfMemoryException!! Directly try again.");
+                Logger.Error("System.OutOfMemoryException!! Directly try again.");
                 // Retry and let it fail if it comes up again.
                 await jsonBlob.OpenRead(new BlobOpenReadOptions(false)
                 {
@@ -81,8 +84,8 @@ public partial class SoundButtons
                 WriteIndented = true
             });
 
-        _logger.Information("Write Json {name}", jsonBlob.Name);
-        _logger.Information("Write Json backup {name}", newjsonBlob.Name);
+        Logger.Information("Write Json {name}", jsonBlob.Name);
+        Logger.Information("Write Json backup {name}", newjsonBlob.Name);
 
         // Write new json file
         var option = new BlobUploadOptions { HttpHeaders = new BlobHttpHeaders { ContentType = "application/json" } };

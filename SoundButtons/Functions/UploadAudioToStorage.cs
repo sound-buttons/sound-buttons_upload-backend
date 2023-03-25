@@ -2,7 +2,7 @@
 using Azure.Storage.Blobs.Models;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.DurableTask;
-using Microsoft.Extensions.Logging;
+using Serilog;
 using Serilog.Context;
 using SoundButtons.Models;
 using System;
@@ -10,10 +10,12 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 
-namespace SoundButtons;
+namespace SoundButtons.Functions;
 
-public partial class SoundButtons
+public class UploadAudioToStorage
 {
+    private static ILogger Logger => Helper.Log.Logger;
+
     [FunctionName("UploadAudioToStorageAsync")]
     public async Task<Request> UploadAudioToStorageAsync(
            [ActivityTrigger] Request request,
@@ -34,12 +36,12 @@ public partial class SoundButtons
             cloudBlockBlob = blobContainerClient.GetBlobClient($"{directory}/{filename + fileExtension}");
         }
         request.filename = filename;
-        _logger.Information($"Filename: {filename + fileExtension}");
+        Logger.Information($"Filename: {filename + fileExtension}");
 
         // Write audio file 
-        _logger.Information("Start to upload audio to blob storage {name}", blobContainerClient.Name);
+        Logger.Information("Start to upload audio to blob storage {name}", blobContainerClient.Name);
         await cloudBlockBlob.UploadAsync(tempPath, new BlobUploadOptions { HttpHeaders = new BlobHttpHeaders { ContentType = "audio/webm" } });
-        _logger.Information("Upload audio to azure finish.");
+        Logger.Information("Upload audio to azure finish.");
 
         if (null != ip)
         {
