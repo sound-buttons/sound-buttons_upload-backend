@@ -22,6 +22,13 @@ internal class OpenAIService
         _apiKey = Environment.GetEnvironmentVariable("OpenAI_ApiKey");
     }
 
+    /// <summary>
+    /// Get speech to text result
+    /// </summary>
+    /// <param name="path">Audio file path to process</param>
+    /// <param name="language">Specified language</param>
+    /// <exception cref="HttpRequestException">Failed to get speech to text result.</exception>
+    /// <returns></returns>
     public async Task<TranscriptionsResponse> SpeechToTextAsync(string path, string language = "")
     {
         if (!CheckApiKey()) return new();
