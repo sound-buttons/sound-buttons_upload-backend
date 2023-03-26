@@ -1,9 +1,15 @@
-﻿namespace SoundButtons.Models;
+﻿using Newtonsoft.Json;
+
+namespace SoundButtons.Models;
+#nullable disable
 
 public class Color
 {
-    public string primary { get; set; }
-    public string secondary { get; set; }
+    [JsonProperty("primary")]
+    public string Primary { get; set; }
+
+    [JsonProperty("secondary")]
+    public string Secondary { get; set; }
 
     public Color() { }
 }

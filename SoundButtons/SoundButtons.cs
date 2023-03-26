@@ -21,7 +21,7 @@ public class SoundButtons
     private static ILogger Logger => Helper.Log.Logger;
 
     [FunctionName("sound-buttons")]
-    public async Task<IActionResult> HttpStart(
+    public static async Task<IActionResult> HttpStart(
         [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
         [DurableClient] IDurableOrchestrationClient starter)
     {
@@ -32,7 +32,7 @@ public class SoundButtons
             return new BadRequestResult();
 
         Source source = GetSourceInfo(req);
-        string clip = await ProcessYoutubeClip(req, source);
+        string? clip = await ProcessYoutubeClip(req, source);
 
         string tempPath = "";
         try
@@ -57,7 +57,7 @@ public class SoundButtons
                                                                    // toast ID用於回傳，讓前端能取消顯示toast
                                                                    toastId: req.Form.GetFirstValue("toastId") ?? "-1",
                                                                    tempPath: tempPath,
-                                                                   ip: req.Headers.FirstOrDefault(x => x.Key == "X-Forwarded-For").Value.FirstOrDefault(),
+                                                                   ip: req.Headers.FirstOrDefault(x => x.Key == "X-Forwarded-For").Value.FirstOrDefault() ?? "",
                                                                    nameZH: req.Form.GetFirstValue("nameZH") ?? "",
                                                                    nameJP: req.Form.GetFirstValue("nameJP") ?? "",
                                                                    volume: volume,
@@ -65,7 +65,7 @@ public class SoundButtons
         return orchestratorResult;
     }
 
-    private async Task<IActionResult> StartOrchestrator(HttpRequest req, IDurableOrchestrationClient starter, string filename, string directory, Source source, string clip, string toastId, string tempPath, string ip, string nameZH, string nameJP, float volume, string group)
+    private static async Task<IActionResult> StartOrchestrator(HttpRequest req, IDurableOrchestrationClient starter, string filename, string directory, Source source, string? clip, string toastId, string tempPath, string ip, string nameZH, string nameJP, float volume, string group)
     {
         string instanceId = Guid.NewGuid().ToString();
         await starter.StartNewAsync(
@@ -73,18 +73,18 @@ public class SoundButtons
             instanceId: instanceId,
             input: new Request()
             {
-                directory = directory,
-                filename = filename,
-                ip = ip,
-                source = source,
-                group = group,
-                nameZH = nameZH,
-                nameJP = nameJP,
-                volume = volume,
-                tempPath = tempPath,
-                toastId = toastId,
-                clip = clip,
-                instanceId = instanceId
+                Directory = directory,
+                Filename = filename,
+                Ip = ip,
+                Source = source,
+                Group = group,
+                NameZH = nameZH,
+                NameJP = nameJP,
+                Volume = volume,
+                TempPath = tempPath,
+                ToastId = toastId,
+                Clip = clip,
+                InstanceId = instanceId
             });
 
         Logger.Information($"Started orchestration with ID = '{instanceId}'.");
@@ -92,9 +92,9 @@ public class SoundButtons
         return starter.CreateCheckStatusResponse(req, instanceId, true);
     }
 
-    private string GetFileName(HttpRequest req)
+    private static string GetFileName(HttpRequest req)
     {
-        string name = req.Form.GetFirstValue("nameZH"); // 用於回傳
+        string? name = req.Form.GetFirstValue("nameZH"); // 用於回傳
         string filename = name ?? "";
         filename = Regex.Replace(filename, @"[^0-9a-zA-Z\p{L}]+", ""); // 比對通過英數、中日文字等(多位元組字元)
         if (filename.Length == 0)
@@ -103,47 +103,47 @@ public class SoundButtons
         return filename;
     }
 
-    private Source GetSourceInfo(HttpRequest req)
+    private static Source GetSourceInfo(HttpRequest req)
     {
         var source = new Source
         {
-            videoId = req.Form.GetFirstValue("videoId") ?? "",
-            start = 0,
-            end = 0
+            VideoId = req.Form.GetFirstValue("videoId") ?? "",
+            Start = 0,
+            End = 0
         };
         if (double.TryParse(req.Form.GetFirstValue("start"), out double start)
             && double.TryParse(req.Form.GetFirstValue("end"), out double end))
         {
-            source.start = start;
-            source.end = end;
+            source.Start = start;
+            source.End = end;
         }
 
-        if (!string.IsNullOrEmpty(source.videoId) && source.videoId.StartsWith("http"))
+        if (!string.IsNullOrEmpty(source.VideoId) && source.VideoId.StartsWith("http"))
         {
             // Regex for strip youtube video id from url c# and returl default thumbnail
             // https://gist.github.com/Flatlineato/f4cc3f3937272646d4b0
-            source.videoId = Regex.Match(
-                source.videoId,
+            source.VideoId = Regex.Match(
+                source.VideoId,
                 "https?:\\/\\/(?:[\\w-]+\\.)?(?:youtu\\.be\\/|youtube(?:-nocookie)?\\.com\\S*[^\\w\\s-])([\\w-]{11})(?=[^\\w-]|$)(?![?=&+%\\w.-]*(?:['\"][^<>]*>|<\\/a>))[?=&+%\\w.-]*",
                 RegexOptions.IgnoreCase).Groups[1].Value;
 
-            if (string.IsNullOrEmpty(source.videoId))
+            if (string.IsNullOrEmpty(source.VideoId))
             {
                 // Discard unknown source
-                source.videoId = "";
-                source.start = 0;
-                source.end = 0;
-                Logger.Error("Discard unknown source: {source}", source.videoId);
+                source.VideoId = "";
+                source.Start = 0;
+                source.End = 0;
+                Logger.Error("Discard unknown source: {source}", source.VideoId);
             }
-            Logger.Information("Get info from form: {videoId}, {start}, {end}", source.videoId, source.start, source.end);
+            Logger.Information("Get info from form: {videoId}, {start}, {end}", source.VideoId, source.Start, source.End);
         }
 
         return source;
     }
 
-    private async Task<string> ProcessYoutubeClip(HttpRequest req, Source source)
+    private static async Task<string?> ProcessYoutubeClip(HttpRequest req, Source source)
     {
-        string clip = req.Form.GetFirstValue("clip");
+        string? clip = req.Form.GetFirstValue("clip");
         Regex clipReg = new(@"https?:\/\/(?:[\w-]+\.)?(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/)clip\/[?=&+%\w.-]*");
         if (!string.IsNullOrEmpty(clip) && clipReg.IsMatch(clip))
         {
@@ -157,21 +157,21 @@ public class SoundButtons
             if (double.TryParse(match1.Groups[1].Value, out double _start)
                 && double.TryParse(match1.Groups[2].Value, out double _end))
             {
-                source.start = _start / 1000;
-                source.end = _end / 1000;
+                source.Start = _start / 1000;
+                source.End = _end / 1000;
             }
 
             // {"videoId":"Gs7QYATahy4"}
             Regex reg2 = new(@"{""videoId"":""([\w-]+)""");
             Match match2 = reg2.Match(body);
-            source.videoId = match2.Groups[1].Value;
-            Logger.Information("Get info from clip: {videoId}, {start}, {end}", source.videoId, source.start, source.end);
+            source.VideoId = match2.Groups[1].Value;
+            Logger.Information("Get info from clip: {videoId}, {start}, {end}", source.VideoId, source.Start, source.End);
         }
 
         return clip;
     }
 
-    private async Task<string> ProcessAudioFileAsync(HttpRequest req, Source source)
+    private static async Task<string> ProcessAudioFileAsync(HttpRequest req, Source source)
     {
         IFormFileCollection files = req.Form.Files;
         Logger.Information("Files Count: {fileCount}", files.Count);
@@ -180,17 +180,17 @@ public class SoundButtons
             return await ProcessAudioFromFileUpload(files);
         }
         // source檢核
-        else if (string.IsNullOrEmpty(source.videoId)
-                 || source.end - source.start <= 0
-                 || source.end - source.start > 180)
+        else if (string.IsNullOrEmpty(source.VideoId)
+                 || source.End - source.Start <= 0
+                 || source.End - source.Start > 180)
         {
-            Logger.Error("video time invalid: {start}, {end}", source.start, source.end);
-            throw new Exception($"video time invalid: {source.start}, {source.end}");
+            Logger.Error("video time invalid: {start}, {end}", source.Start, source.End);
+            throw new Exception($"video time invalid: {source.Start}, {source.End}");
         }
         return "";
     }
 
-    private async Task<string> ProcessAudioFromFileUpload(IFormFileCollection files)
+    private static async Task<string> ProcessAudioFromFileUpload(IFormFileCollection files)
     {
         var tempDir = Helper.FileHelper.PrepareTempDir();
         string tempPath = Path.Combine(tempDir, DateTime.Now.Ticks.ToString() + ".tmp");
@@ -215,19 +215,23 @@ public class SoundButtons
     }
 
     private static void CleanUp(string tempPath)
-        => Directory.Delete(Path.GetDirectoryName(tempPath), true);
+    {
+        var path = Path.GetDirectoryName(tempPath);
+        if (path == null) { return; }
+        Directory.Delete(path, true);
+    }
 
     [FunctionName("main-sound-buttons")]
-    public async Task<bool> RunOrchestrator(
+    public static async Task<bool> RunOrchestrator(
         [OrchestrationTrigger] IDurableOrchestrationContext context)
     {
         Request request = context.GetInput<Request>();
-        using var _ = LogContext.PushProperty("InstanceId", request.instanceId);
+        using var _ = LogContext.PushProperty("InstanceId", request.InstanceId);
 
         // 若表單有音檔，前一步驟會把檔案放入這個路徑
-        if (string.IsNullOrEmpty(request.tempPath))
+        if (string.IsNullOrEmpty(request.TempPath))
         {
-            request.tempPath = await context.CallActivityAsync<string>("ProcessAudioAsync", request);
+            request.TempPath = await context.CallActivityAsync<string>("ProcessAudioAsync", request);
         }
 
 
@@ -236,8 +240,8 @@ public class SoundButtons
 
         await context.CallActivityAsync("ProcessJsonFile", request);
 
-        CleanUp(request.tempPath);
-        Logger.Information("Finish. {filename}", request.nameZH);
+        CleanUp(request.TempPath);
+        Logger.Information("Finish. {filename}", request.NameZH);
 
         return true;
     }

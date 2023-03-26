@@ -21,11 +21,11 @@ public class UploadAudioToStorage
            [ActivityTrigger] Request request,
            [Blob("sound-buttons"), StorageAccount("AzureStorage")] BlobContainerClient blobContainerClient)
     {
-        using var _ = LogContext.PushProperty("InstanceId", request.instanceId);
-        string ip = request.ip;
-        string filename = request.filename;
-        string directory = request.directory;
-        string tempPath = request.tempPath;
+        using var _ = LogContext.PushProperty("InstanceId", request.InstanceId);
+        string ip = request.Ip;
+        string filename = request.Filename;
+        string directory = request.Directory;
+        string tempPath = request.TempPath;
         string fileExtension = Path.GetExtension(tempPath);
 
         // Get a new file name on blob storage
@@ -35,7 +35,7 @@ public class UploadAudioToStorage
             filename += $"_{DateTime.Now.Ticks}";
             cloudBlockBlob = blobContainerClient.GetBlobClient($"{directory}/{filename + fileExtension}");
         }
-        request.filename = filename;
+        request.Filename = filename;
         Logger.Information($"Filename: {filename + fileExtension}");
 
         // Write audio file 

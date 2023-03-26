@@ -24,7 +24,7 @@ internal static class ProcessAudioHelper
 
     internal static async Task<string> UpdateYtdlpAsync(string tempDir)
     {
-        bool useBuiltInYtdlp = bool.Parse(Environment.GetEnvironmentVariable("UseBuiltInYtdlp"));
+        bool useBuiltInYtdlp = bool.Parse(Environment.GetEnvironmentVariable("UseBuiltInYtdlp") ?? "false");
         string youtubeDLPath = Path.Combine(tempDir, "yt-dlp.exe");
 
         if (useBuiltInYtdlp) return UseBuiltInYtdlp();
@@ -69,23 +69,23 @@ internal static class ProcessAudioHelper
             Output = tempPath
         };
         optionSet.AddCustomOption("--extractor-args", "youtube:skip=dash");
-        optionSet.AddCustomOption("--download-sections", $"*{source.start}-{source.end}");
+        optionSet.AddCustomOption("--download-sections", $"*{source.Start}-{source.End}");
         //optionSet.ExternalDownloader = "ffmpeg";
         //optionSet.ExternalDownloaderArgs = $"ffmpeg_i:-ss {source.start} -to {source.end}";
 
         // 下載音訊來源
-        Logger.Information("Start to download audio source from youtube {videoId}", source.videoId);
+        Logger.Information("Start to download audio source from youtube {videoId}", source.VideoId);
 
         YoutubeDLProcess youtubeDLProcess = new(youtubeDLPath);
 
         youtubeDLProcess.OutputReceived += (_, e)
-            => Logger.Verbose(e.Data);
+            => Logger.Verbose(e.Data ?? "");
         youtubeDLProcess.ErrorReceived += (_, e)
-            => Logger.Verbose(e.Data);
+            => Logger.Verbose(e.Data ?? "");
         Logger.Debug("yt-dlp arguments: {arguments}", optionSet.ToString());
 
         return youtubeDLProcess.RunAsync(
-            new string[] { @$"https://youtu.be/{source.videoId}" },
+            new string[] { @$"https://youtu.be/{source.VideoId}" },
             optionSet,
             new System.Threading.CancellationToken());
     }
@@ -95,7 +95,7 @@ internal static class ProcessAudioHelper
         // 剪切音檔
         Logger.Information("Start to cut audio");
 
-        double duration = source.end - source.start;
+        double duration = source.End - source.Start;
 
         IMediaInfo mediaInfo = await FFmpeg.GetMediaInfo(tempPath);
         var outputPath = Path.GetTempFileName();
@@ -109,7 +109,7 @@ internal static class ProcessAudioHelper
         conversion.OnProgress += (_, e)
             => Logger.Verbose("Progress: {progress}%", e.Percent);
         conversion.OnDataReceived += (_, e)
-            => Logger.Verbose(e.Data);
+            => Logger.Verbose(e.Data ?? "");
         Logger.Debug("FFmpeg arguments: {arguments}", conversion.Build());
 
         IConversionResult convRes = await conversion.Start();
@@ -121,7 +121,7 @@ internal static class ProcessAudioHelper
 
     internal static async Task<string> TranscodeAudioAsync(string tempPath)
     {
-        await UpdateFFmpegAsync(Path.GetDirectoryName(tempPath));
+        await UpdateFFmpegAsync(Path.GetDirectoryName(tempPath)!);
 
         Logger.Information("Start to transcode audio");
 
@@ -137,7 +137,7 @@ internal static class ProcessAudioHelper
         conversion.OnProgress += (_, e)
             => Logger.Verbose("Progress: {progress}%", e.Percent);
         conversion.OnDataReceived += (_, e)
-            => Logger.Verbose(e.Data);
+            => Logger.Verbose(e.Data ?? "");
         Logger.Debug("FFmpeg arguments: {arguments}", conversion.Build());
 
         IConversionResult convRes = await conversion.Start();

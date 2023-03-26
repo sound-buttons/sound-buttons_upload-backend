@@ -19,15 +19,15 @@ public class ProcessJson
     private static ILogger Logger => Helper.Log.Logger;
 
     [FunctionName("ProcessJsonFile")]
-    public async Task ProcessJsonFile(
+    public static async Task ProcessJsonFile(
     [ActivityTrigger] Request request,
     [Blob("sound-buttons"), StorageAccount("AzureStorage")] BlobContainerClient BlobContainerClient)
     {
-        using var _ = LogContext.PushProperty("InstanceId", request.instanceId);
-        Source source = request.source;
-        string directory = request.directory;
-        string filename = request.filename;
-        string fileExtension = Path.GetExtension(request.tempPath);
+        using var _ = LogContext.PushProperty("InstanceId", request.InstanceId);
+        Source source = request.Source;
+        string directory = request.Directory;
+        string filename = request.Filename;
+        string fileExtension = Path.GetExtension(request.TempPath);
         // Get last json file
         BlobClient jsonBlob = BlobContainerClient.GetBlobClient($"{directory}/{directory}.json");
         if (!jsonBlob.Exists().Value)
@@ -37,7 +37,7 @@ public class ProcessJson
         }
         Logger.Information("Read Json file {name}", jsonBlob.Name);
 
-        JsonRoot root;
+        JsonRoot? root;
         // Read last json file
         using (MemoryStream ms = new())
         {
@@ -64,6 +64,11 @@ public class ProcessJson
                 // For Unicode and '&' characters
                 Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
             });
+
+        if (null == root)
+        {
+            Logger.Fatal("{jsonFile} is json invalid!!", jsonBlob.Name);
+            return; 
         }
 
         // Get new json file block
@@ -93,53 +98,44 @@ public class ProcessJson
                            jsonBlob.UploadAsync(new BinaryData(result), option));
     }
 
-    private JsonRoot UpdateJson(JsonRoot root, string directory, string filename, Request request, Source source)
+    private static JsonRoot UpdateJson(JsonRoot root, string directory, string filename, Request request, Source source)
     {
+        Logger.Information("Update Json");
+
         // Variables prepare
         string baseRoute = $"https://soundbuttons.blob.core.windows.net/sound-buttons/{directory}/";
 
-        string group = request.group;
+        string group = request.Group;
 
         // Get ButtonGrop if exists, or new one
-        ButtonGroup buttonGroup = null;
-        foreach (var btg in root.buttonGroups)
-        {
-            try
-            {
-                var name = btg.name.ZhTw;
-
-                if (group == name)
-                {
-                    buttonGroup = btg;
-
-                    break;
-                }
-            }
-            catch (InvalidCastException) { }
-        }
-        if (null == buttonGroup)
+        ButtonGroup? buttonGroup = root.ButtonGroups.Find(p=>p.Name?.ZhTw == group || p.Name?.Ja == group);
+        if (buttonGroup == null)
         {
             buttonGroup = new ButtonGroup
             {
-                name = new Text(group, group),
-                baseRoute = baseRoute,
-                buttons = new List<Button>()
+                Name = new Text(group, group),
+                BaseRoute = baseRoute,
+                Buttons = new List<Button>()
             };
-            root.buttonGroups.Add(buttonGroup);
+            root.ButtonGroups.Add(buttonGroup);
+        }
+        else if (null != buttonGroup.Name && string.IsNullOrEmpty(buttonGroup.Name.Ja))
+        {
+            buttonGroup.Name.Ja = buttonGroup.Name.ZhTw;
         }
 
         // Prevent script injection
-        source.videoId = System.Web.HttpUtility.UrlEncode(source.videoId);
+        source.VideoId = System.Web.HttpUtility.UrlEncode(source.VideoId);
 
         // Add button
 
-        buttonGroup.buttons.Add(new Button(
+        buttonGroup.Buttons.Add(new Button(
             filename,
             new Text(
-                request.nameZH,
-                request.nameJP
+                request.NameZH,
+                request.NameJP
             ),
-            request.volume,
+            request.Volume,
             source
         ));
 

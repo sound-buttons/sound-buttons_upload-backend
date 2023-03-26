@@ -1,18 +1,37 @@
-﻿using System.Collections.Generic;
+﻿using Newtonsoft.Json;
+using System.Collections.Generic;
 
 namespace SoundButtons.Models;
+#nullable disable
 
 public class JsonRoot
 {
-    public string name { get; set; }
-    public string fullName { get; set; }
-    public string fullConfigURL { get; set; }
-    public string[] imgSrc { get; set; }
-    public string intro { get; set; }
-    public Color color { get; set; }
-    public Link link { get; set; }
-    public IntroButton introButton { get; set; }
-    public List<ButtonGroup> buttonGroups { get; set; }
+    [JsonProperty("name")]
+    public string Name { get; set; }
+
+    [JsonProperty("fullName")]
+    public string FullName { get; set; }
+
+    [JsonProperty("fullConfigURL")]
+    public string FullConfigURL { get; set; }
+
+    [JsonProperty("imgSrc")]
+    public string[] ImgSrc { get; set; }
+
+    [JsonProperty("intro")]
+    public string Intro { get; set; }
+
+    [JsonProperty("color")]
+    public Color Color { get; set; }
+
+    [JsonProperty("link")]
+    public Link Link { get; set; }
+
+    [JsonProperty("introButton")]
+    public IntroButton IntroButton { get; set; }
+
+    [JsonProperty("buttonGroups")]
+    public List<ButtonGroup> ButtonGroups { get; set; }
 
     public JsonRoot() { }
 }

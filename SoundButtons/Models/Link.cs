@@ -1,13 +1,27 @@
-﻿namespace SoundButtons.Models;
+﻿using Newtonsoft.Json;
+
+namespace SoundButtons.Models;
+#nullable disable
 
 public class Link
 {
-    public string youtube { get; set; }
-    public string twitter { get; set; }
-    public string facebook { get; set; }
-    public string instagram { get; set; }
-    public string discord { get; set; }
-    public string other { get; set; }
+    [JsonProperty("youtube")]
+    public string Youtube { get; set; }
+
+    [JsonProperty("twitter")]
+    public string Twitter { get; set; }
+
+    [JsonProperty("facebook")]
+    public string Facebook { get; set; }
+
+    [JsonProperty("instagram")]
+    public string Instagram { get; set; }
+
+    [JsonProperty("discord")]
+    public string Discord { get; set; }
+
+    [JsonProperty("other")]
+    public string Other { get; set; }
 
     public Link() { }
 }

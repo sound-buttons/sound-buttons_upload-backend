@@ -20,7 +20,7 @@ public class ProcessAudio
         [ActivityTrigger] Request request,
         [Blob("sound-buttons"), StorageAccount("AzureStorage")] BlobContainerClient blobContainerClient)
     {
-        using var _ = LogContext.PushProperty("InstanceId", request.instanceId);
+        using var _ = LogContext.PushProperty("InstanceId", request.InstanceId);
         var tempDir = Helper.FileHelper.PrepareTempDir();
         string tempPath = Path.Combine(tempDir, DateTime.Now.Ticks.ToString() + ".webm");
 
@@ -32,8 +32,8 @@ public class ProcessAudio
         await Task.WhenAll(task1, task2);
         string youtubeDLPath = task2.Result;
 
-        await ProcessAudioHelper.DownloadAudioAsync(youtubeDLPath, tempPath, request.source);
-        await ProcessAudioHelper.CutAudioAsync(tempPath, request.source);
+        await ProcessAudioHelper.DownloadAudioAsync(youtubeDLPath, tempPath, request.Source);
+        await ProcessAudioHelper.CutAudioAsync(tempPath, request.Source);
         return tempPath;
     }
 }

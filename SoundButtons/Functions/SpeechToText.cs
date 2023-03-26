@@ -17,16 +17,16 @@ public class SpeechToText
     public async Task<Request> SpeechToTextAsync(
         [ActivityTrigger] Request request)
     {
-        using var _ = LogContext.PushProperty("InstanceId", request.instanceId);
+        using var _ = LogContext.PushProperty("InstanceId", request.InstanceId);
         Logger.Information($"Start to do speech to text.");
         var openAIService = new OpenAIService();
         try
         {
-            if (string.IsNullOrEmpty(request.nameJP))
+            if (string.IsNullOrEmpty(request.NameJP))
             {
-                var speechToTextJP = await openAIService.SpeechToTextAsync(request.tempPath, "ja");
+                var speechToTextJP = await openAIService.SpeechToTextAsync(request.TempPath, "ja");
 
-                request.nameJP = speechToTextJP.Text;
+                request.NameJP = speechToTextJP?.Text ?? "";
             }
         }
         catch (HttpRequestException e)
@@ -36,12 +36,12 @@ public class SpeechToText
 
         try
         {
-            if (string.IsNullOrEmpty(request.nameZH))
+            if (string.IsNullOrEmpty(request.NameZH))
             {
                 Logger.Information($"Start to process zh.");
-                var speechToTextZH = await openAIService.SpeechToTextAsync(request.tempPath, "zh");
+                var speechToTextZH = await openAIService.SpeechToTextAsync(request.TempPath, "zh");
 
-                request.nameZH = speechToTextZH.Text;
+                request.NameZH = speechToTextZH?.Text ?? "";
             }
         }
         catch (HttpRequestException e)

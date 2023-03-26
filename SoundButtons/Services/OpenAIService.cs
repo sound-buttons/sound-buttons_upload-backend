@@ -1,4 +1,5 @@
-﻿using SoundButtons.Models;
+﻿using Serilog;
+using SoundButtons.Models;
 using System;
 using System.IO;
 using System.Net.Http;
@@ -9,9 +10,10 @@ namespace SoundButtons.Services;
 
 internal class OpenAIService
 {
+    private static ILogger Logger => Helper.Log.Logger;
     private readonly HttpClient _client;
     public string OpenAIEndpoint { get; } = "https://api.openai.com/v1/";
-    private static string _apiKey = "";
+    private static string? _apiKey = "";
 
     public OpenAIService()
     {
@@ -20,6 +22,10 @@ internal class OpenAIService
             BaseAddress = new(OpenAIEndpoint)
         };
         _apiKey = Environment.GetEnvironmentVariable("OpenAI_ApiKey");
+        if (string.IsNullOrEmpty(_apiKey))
+        {
+            Logger.Fatal("OpenAI api key is not set.");
+        }
     }
 
     /// <summary>
@@ -29,7 +35,7 @@ internal class OpenAIService
     /// <param name="language">Specified language</param>
     /// <exception cref="HttpRequestException">Failed to get speech to text result.</exception>
     /// <returns></returns>
-    public async Task<TranscriptionsResponse> SpeechToTextAsync(string path, string language = "")
+    public async Task<TranscriptionsResponse?> SpeechToTextAsync(string path, string language = "")
     {
         if (!CheckApiKey()) return new();
 
