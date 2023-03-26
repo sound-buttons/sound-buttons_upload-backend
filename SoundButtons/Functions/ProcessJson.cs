@@ -2,15 +2,16 @@
 using Azure.Storage.Blobs.Models;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.DurableTask;
+using Newtonsoft.Json.Linq;
+using Newtonsoft.Json;
 using Serilog;
 using Serilog.Context;
 using SoundButtons.Models;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text.Encodings.Web;
-using System.Text.Json;
 using System.Threading.Tasks;
+using System.Text;
 
 namespace SoundButtons.Functions;
 
@@ -57,13 +58,19 @@ public class ProcessJson
             }
 
             ms.Seek(0, SeekOrigin.Begin);
-            root = await JsonSerializer.DeserializeAsync<JsonRoot>(ms, new JsonSerializerOptions
+            var serializerSettings = new JsonSerializerSettings
             {
-                ReadCommentHandling = JsonCommentHandling.Skip,
-                AllowTrailingCommas = true,
+                // Allow trailing commas in JSON
+                FloatParseHandling = FloatParseHandling.Double,
                 // For Unicode and '&' characters
-                Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-            });
+                StringEscapeHandling = StringEscapeHandling.EscapeHtml,
+            };
+
+            using var streamReader = new StreamReader(ms);
+            using var jsonReader = new JsonTextReader(streamReader);
+            var serializer = JsonSerializer.CreateDefault(serializerSettings);
+            root = serializer.Deserialize<JsonRoot>(jsonReader);
+        }
 
         if (null == root)
         {
@@ -81,13 +88,7 @@ public class ProcessJson
                                    request,
                                    source
                                    );
-        byte[] result = JsonSerializer.SerializeToUtf8Bytes<JsonRoot>(
-            json,
-            new JsonSerializerOptions
-            {
-                Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-                WriteIndented = true
-            });
+        byte[] result = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(json, Formatting.Indented));
 
         Logger.Information("Write Json {name}", jsonBlob.Name);
         Logger.Information("Write Json backup {name}", newjsonBlob.Name);

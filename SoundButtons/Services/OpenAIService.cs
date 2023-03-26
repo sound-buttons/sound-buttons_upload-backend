@@ -1,9 +1,9 @@
-﻿using Serilog;
+﻿using Newtonsoft.Json;
+using Serilog;
 using SoundButtons.Models;
 using System;
 using System.IO;
 using System.Net.Http;
-using System.Net.Http.Json;
 using System.Threading.Tasks;
 
 namespace SoundButtons.Services;
@@ -61,7 +61,8 @@ internal class OpenAIService
         using var response = await _client.SendAsync(request);
         response.EnsureSuccessStatusCode();
 
-        return await response.Content.ReadFromJsonAsync<TranscriptionsResponse>();
+        var json = await response.Content.ReadAsStringAsync();
+        return JsonConvert.DeserializeObject<TranscriptionsResponse>(json);
     }
 
     private static bool CheckApiKey() => !string.IsNullOrEmpty(_apiKey);
