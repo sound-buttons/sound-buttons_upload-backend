@@ -8,6 +8,9 @@ public class Link
     [JsonProperty("youtube")]
     public string Youtube { get; set; }
 
+    [JsonProperty("twitch")]
+    public string Twitch { get; set; }
+
     [JsonProperty("twitter")]
     public string Twitter { get; set; }
 
