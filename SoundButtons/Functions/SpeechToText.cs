@@ -22,7 +22,7 @@ public class SpeechToText
         var openAIService = new OpenAIService();
         try
         {
-            if (string.IsNullOrEmpty(request.NameJP))
+            if (request.NameJP == "[useSTT]")
             {
                 var speechToTextJP = await openAIService.SpeechToTextAsync(request.TempPath, "ja");
 
@@ -32,21 +32,6 @@ public class SpeechToText
         catch (HttpRequestException e)
         {
             Logger.Error(e, "Failed to get STT ja response.");
-        }
-
-        try
-        {
-            if (string.IsNullOrEmpty(request.NameZH))
-            {
-                Logger.Information($"Start to process zh.");
-                var speechToTextZH = await openAIService.SpeechToTextAsync(request.TempPath, "zh");
-
-                request.NameZH = speechToTextZH?.Text ?? "";
-            }
-        }
-        catch (HttpRequestException e)
-        {
-            Logger.Error(e, "Failed to get STT zh response.");
         }
 
         return request;

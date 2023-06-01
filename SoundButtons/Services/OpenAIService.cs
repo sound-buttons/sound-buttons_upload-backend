@@ -44,7 +44,7 @@ internal class OpenAIService
         {
             { new StreamContent(fileStream), "file", Path.GetFileName(path) },
             { new StringContent("whisper-1"), "model" },
-            { new StringContent("Remove superfluous words, the speaker's self-proclaimed may be \"艦長\", \"ユリ\""), "prompt" },
+            { new StringContent("Remove superfluous words"), "prompt" },
             { new StringContent("verbose_json"), "response_format" },
             { new StringContent("0.1"), "temperature" }
         };
