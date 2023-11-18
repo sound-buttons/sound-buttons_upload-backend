@@ -1,4 +1,5 @@
 [![Build and deploy dotnet core app to Azure Function App - SoundButtonsEastAsia](https://github.com/jim60105/sound-buttons_upload-backend/actions/workflows/master_SoundButtonsEastAsia.yml/badge.svg)](https://github.com/jim60105/sound-buttons_upload-backend/actions/workflows/master_SoundButtonsEastAsia.yml)
+[![CodeQL](https://github.com/sound-buttons/sound-buttons_upload-backend/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/sound-buttons/sound-buttons_upload-backend/actions/workflows/github-code-scanning/codeql)
 
 # LICENSE
 
