@@ -27,7 +27,7 @@ public class SoundButtons
     {
         // 驗證ContentType為multipart/form-data
         string contentType = req.ContentType;
-        Logger.Information($"Content-Type: {contentType}");
+        Logger.Information("Content-Type: {contentType}", contentType);
         if (!contentType.Contains("multipart/form-data;"))
             return new BadRequestResult();
 
@@ -87,7 +87,7 @@ public class SoundButtons
                 InstanceId = instanceId
             });
 
-        Logger.Information($"Started orchestration with ID = '{instanceId}'.");
+        Logger.Information("Started orchestration with ID {instanceId}.", instanceId);
 
         return starter.CreateCheckStatusResponse(req, instanceId, true);
     }
@@ -202,7 +202,7 @@ public class SoundButtons
         // Get file info
         var _fileExtension = Path.GetExtension(file.FileName) ?? "";
         tempPath = Path.ChangeExtension(tempPath, _fileExtension);
-        Logger.Information($"Get extension: {_fileExtension}");
+        Logger.Information("Get extension: {fileExtension}", _fileExtension);
         using (var fs = new FileStream(tempPath, FileMode.OpenOrCreate, FileAccess.Write))
         {
             file.CopyTo(fs);
