@@ -65,13 +65,11 @@ internal static class ProcessAudioHelper
         {
             // 最佳音質
             Format = "251",
-            NoCheckCertificate = true,
-            Output = tempPath
+            NoCheckCertificates = true,
+            Output = tempPath,
+            ExtractorArgs = "youtube:skip=dash",
+            DownloadSections = $"*{source.Start}-{source.End}",
         };
-        optionSet.AddCustomOption("--extractor-args", "youtube:skip=dash");
-        optionSet.AddCustomOption("--download-sections", $"*{source.Start}-{source.End}");
-        //optionSet.ExternalDownloader = "ffmpeg";
-        //optionSet.ExternalDownloaderArgs = $"ffmpeg_i:-ss {source.start} -to {source.end}";
 
         // 下載音訊來源
         Logger.Information("Start to download audio source from youtube {videoId}", source.VideoId);
