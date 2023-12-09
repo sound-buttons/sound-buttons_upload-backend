@@ -25,44 +25,28 @@ public class SoundButtons
         [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
         [DurableClient] IDurableOrchestrationClient starter)
     {
-        // 驗證ContentType為multipart/form-data
-        string contentType = req.ContentType;
-        Logger.Information("Content-Type: {contentType}", contentType);
-        if (!contentType.Contains("multipart/form-data;"))
+        Logger.Information("Content-Type: {contentType}", req.ContentType);
+        if (!req.ContentType.Contains("multipart/form-data;"))
             return new BadRequestResult();
 
         Source source = GetSourceInfo(req);
-        string? clip = await ProcessYoutubeClip(req, source);
-
-        string tempPath = "";
-        try
-        {
-            tempPath = await ProcessAudioFileAsync(req, source);
-        }
-        catch (Exception e)
-        {
-            Logger.Error("ProcessAudioFileAsync: {exception}, {message}, {stacktrace}", e, e.Message, e.StackTrace);
-            return new BadRequestResult();
-        }
-
-        if (!float.TryParse(req.Form.GetFirstValue("volume"), out float volume)) { volume = 1; }
 
         // 啟動長輪詢
-        IActionResult orchestratorResult = await StartOrchestrator(req: req,
-                                                                   starter: starter,
-                                                                   filename: GetFileName(req),
-                                                                   directory: req.Form.GetFirstValue("directory") ?? "test",
-                                                                   source: source,
-                                                                   clip: clip,
-                                                                   // toast ID用於回傳，讓前端能取消顯示toast
-                                                                   toastId: req.Form.GetFirstValue("toastId") ?? "-1",
-                                                                   tempPath: tempPath,
-                                                                   ip: req.Headers.FirstOrDefault(x => x.Key == "X-Forwarded-For").Value.FirstOrDefault() ?? "",
-                                                                   nameZH: req.Form.GetFirstValue("nameZH") ?? "",
-                                                                   nameJP: req.Form.GetFirstValue("nameJP") ?? "",
-                                                                   volume: volume,
-                                                                   group: req.Form.GetFirstValue("group") ?? "未分類");
-        return orchestratorResult;
+        return await StartOrchestrator(
+            req: req,
+            starter: starter,
+            filename: GetFileName(req),
+            directory: req.Form.GetFirstValue("directory") ?? "test",
+            source: source,
+            clip: await ProcessYoutubeClip(req, source),
+            // toast ID用於回傳，讓前端能取消顯示toast
+            toastId: req.Form.GetFirstValue("toastId") ?? "-1",
+            tempPath: await ProcessAudioFileAsync(req, source),
+            ip: req.Headers.FirstOrDefault(x => x.Key == "X-Forwarded-For").Value.FirstOrDefault() ?? "",
+            nameZH: req.Form.GetFirstValue("nameZH") ?? "",
+            nameJP: req.Form.GetFirstValue("nameJP") ?? "",
+            volume: float.TryParse(req.Form.GetFirstValue("volume"), out var volume) ? volume : 1,
+            group: req.Form.GetFirstValue("group") ?? "未分類");
     }
 
     private static async Task<IActionResult> StartOrchestrator(HttpRequest req, IDurableOrchestrationClient starter, string filename, string directory, Source source, string? clip, string toastId, string tempPath, string ip, string nameZH, string nameJP, float volume, string group)
