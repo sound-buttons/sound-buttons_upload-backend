@@ -15,4 +15,3 @@ static class Extension
         return result;
     }
 }
-

@@ -2,7 +2,9 @@
 using System.Collections.Generic;
 #nullable disable
 
-namespace SoundButtons.Models
+namespace SoundButtons.Models;
+
+public class OpenAI
 {
     public class TranscriptionsResponse
     {

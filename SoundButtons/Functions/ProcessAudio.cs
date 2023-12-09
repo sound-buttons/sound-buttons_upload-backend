@@ -16,7 +16,7 @@ public class ProcessAudio
     private static ILogger Logger => Helper.Log.Logger;
 
     [FunctionName("ProcessAudioAsync")]
-    public async Task<string> ProcessAudioAsync(
+    public static async Task<string> ProcessAudioAsync(
         [ActivityTrigger] Request request,
         [Blob("sound-buttons"), StorageAccount("AzureStorage")] BlobContainerClient blobContainerClient)
     {

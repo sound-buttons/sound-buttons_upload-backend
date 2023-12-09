@@ -234,7 +234,6 @@ public class SoundButtons
             request.TempPath = await context.CallActivityAsync<string>("ProcessAudioAsync", request);
         }
 
-
         request = await context.CallActivityAsync<Request>("UploadAudioToStorageAsync", request);
         request = await context.CallActivityAsync<Request>("SpeechToTextAsync", request);
 
@@ -246,4 +245,3 @@ public class SoundButtons
         return true;
     }
 }
-

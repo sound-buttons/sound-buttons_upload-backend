@@ -83,7 +83,7 @@ internal static class ProcessAudioHelper
         Logger.Debug("yt-dlp arguments: {arguments}", optionSet.ToString());
 
         return youtubeDLProcess.RunAsync(
-            new string[] { @$"https://youtu.be/{source.VideoId}" },
+            new string[] { $"https://youtu.be/{source.VideoId}" },
             optionSet,
             new System.Threading.CancellationToken());
     }
