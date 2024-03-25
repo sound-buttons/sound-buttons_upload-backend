@@ -32,8 +32,16 @@ public class ProcessAudio
         await Task.WhenAll(task1, task2);
         string youtubeDLPath = task2.Result;
 
-        await ProcessAudioHelper.DownloadAudioAsync(youtubeDLPath, tempPath, request.Source);
-        await ProcessAudioHelper.CutAudioAsync(tempPath, request.Source);
+        if (!string.IsNullOrEmpty(request.Source.VideoId))
+        {
+            await ProcessAudioHelper.DownloadAudioAsync(youtubeDLPath, tempPath, request.Source);
+            await ProcessAudioHelper.CutAudioAsync(tempPath, request.Source);
+        }
+        else
+        {
+            await ProcessAudioHelper.DownloadAudioAsync(youtubeDLPath, tempPath, request.Clip);
+        }
+
         return tempPath;
     }
 }

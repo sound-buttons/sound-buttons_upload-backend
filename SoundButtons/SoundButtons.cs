@@ -32,21 +32,20 @@ public class SoundButtons
         Source source = GetSourceInfo(req);
 
         // 啟動長輪詢
-        return await StartOrchestrator(
-            req: req,
-            starter: starter,
-            filename: GetFileName(req),
-            directory: req.Form.GetFirstValue("directory") ?? "test",
-            source: source,
-            clip: await ProcessYoutubeClip(req, source),
-            // toast ID用於回傳，讓前端能取消顯示toast
-            toastId: req.Form.GetFirstValue("toastId") ?? "-1",
-            tempPath: await ProcessAudioFileAsync(req, source),
-            ip: req.Headers.FirstOrDefault(x => x.Key == "X-Forwarded-For").Value.FirstOrDefault() ?? "",
-            nameZH: req.Form.GetFirstValue("nameZH") ?? "",
-            nameJP: req.Form.GetFirstValue("nameJP") ?? "",
-            volume: float.TryParse(req.Form.GetFirstValue("volume"), out var volume) ? volume : 1,
-            group: req.Form.GetFirstValue("group") ?? "未分類");
+        return await StartOrchestrator(req: req,
+                                       starter: starter,
+                                       filename: GetFileName(req),
+                                       directory: req.Form.GetFirstValue("directory") ?? "test",
+                                       source: source,
+                                       clip: await ProcessClip(req, source),
+                                       // toast ID用於回傳，讓前端能取消顯示toast
+                                       toastId: req.Form.GetFirstValue("toastId") ?? "-1",
+                                       tempPath: await ProcessAudioFileAsync(req, source),
+                                       ip: req.Headers.FirstOrDefault(x => x.Key == "X-Forwarded-For").Value.FirstOrDefault() ?? "",
+                                       nameZH: req.Form.GetFirstValue("nameZH") ?? "",
+                                       nameJP: req.Form.GetFirstValue("nameJP") ?? "",
+                                       volume: float.TryParse(req.Form.GetFirstValue("volume"), out var volume) ? volume : 1,
+                                       group: req.Form.GetFirstValue("group") ?? "未分類");
     }
 
     private static async Task<IActionResult> StartOrchestrator(HttpRequest req, IDurableOrchestrationClient starter, string filename, string directory, Source source, string? clip, string toastId, string tempPath, string ip, string nameZH, string nameJP, float volume, string group)
@@ -125,6 +124,30 @@ public class SoundButtons
         return source;
     }
 
+    private static async Task<string?> ProcessClip(HttpRequest req, Source source)
+    {
+        Regex youtubeClipReg = new(@"https?:\/\/(?:[\w-]+\.)?(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/)clip\/[?=&+%\w.-]*");
+        Regex twitchClipReg = new(@"^(?:https?:\/\/(?:clips\.twitch\.tv\/|www\.twitch\.tv\/[a-z0-9_-]+\/clip\/))([a-zA-Z0-9_-]+)$");
+
+        string? clip = req.Form.GetFirstValue("clip");
+        if (string.IsNullOrEmpty(clip))
+        {
+            return null;
+        }
+
+        if (youtubeClipReg.IsMatch(clip))
+        {
+            return await ProcessYoutubeClip(req, source);
+        }
+
+        if (twitchClipReg.IsMatch(clip))
+        {
+            return ProcessTwitchClip(req, source);
+        }
+
+        return null;
+    }
+
     private static async Task<string?> ProcessYoutubeClip(HttpRequest req, Source source)
     {
         string? clip = req.Form.GetFirstValue("clip");
@@ -151,6 +174,16 @@ public class SoundButtons
             source.VideoId = match2.Groups[1].Value;
             Logger.Information("Get info from clip: {videoId}, {start}, {end}", source.VideoId, source.Start, source.End);
         }
+
+        return clip;
+    }
+
+    private static string? ProcessTwitchClip(HttpRequest req, Source source)
+    {
+        string? clip = req.Form.GetFirstValue("clip");
+        source.VideoId = string.Empty;
+        source.Start = 0;
+        source.End = 0;
 
         return clip;
     }

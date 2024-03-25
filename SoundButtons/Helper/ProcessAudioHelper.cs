@@ -88,6 +88,33 @@ internal static class ProcessAudioHelper
             new System.Threading.CancellationToken());
     }
 
+    internal static Task<int> DownloadAudioAsync(string youtubeDLPath, string tempPath, string url)
+    {
+        OptionSet optionSet = new()
+        {
+            NoCheckCertificates = true,
+            Output = tempPath,
+        };
+
+        // 下載音訊來源
+        Logger.Information("Start to download audio source from url {url}", url);
+
+        YoutubeDLProcess youtubeDLProcess = new(youtubeDLPath);
+
+        youtubeDLProcess.OutputReceived += (_, e)
+            => Logger.Verbose(e.Data ?? "");
+
+        youtubeDLProcess.ErrorReceived += (_, e)
+            => Logger.Verbose(e.Data ?? "");
+
+        Logger.Debug("yt-dlp arguments: {arguments}", optionSet.ToString());
+
+        return youtubeDLProcess.RunAsync(
+            new string[] { url },
+            optionSet,
+            new System.Threading.CancellationToken());
+    }
+
     internal static async Task CutAudioAsync(string tempPath, Source source)
     {
         // 剪切音檔
