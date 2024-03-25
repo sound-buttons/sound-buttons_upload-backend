@@ -1,9 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace SoundButtons.Helper;
 
@@ -12,7 +8,7 @@ internal static class FileHelper
     public static string PrepareTempDir()
     {
 #if DEBUG
-        var _tempDir = Path.GetTempPath();
+        string _tempDir = Path.GetTempPath();
 #else
         var _tempDir = @"C:\home\data\";
 #endif

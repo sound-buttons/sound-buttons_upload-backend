@@ -1,27 +1,26 @@
-﻿using Newtonsoft.Json;
-using Serilog;
-using SoundButtons.Models;
-using System;
+﻿using System;
 using System.IO;
 using System.Net.Http;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
+using Serilog;
 using static SoundButtons.Models.OpenAI;
+using Log = SoundButtons.Helper.Log;
 
 namespace SoundButtons.Services;
 
 internal class OpenAIService
 {
-    private static ILogger Logger => Helper.Log.Logger;
-    private readonly HttpClient _client;
-    public string OpenAIEndpoint { get; } = "https://api.openai.com/v1/";
     private static string? _apiKey = "";
+    private readonly HttpClient _client;
 
     public OpenAIService()
     {
         _client = new HttpClient
         {
-            BaseAddress = new(OpenAIEndpoint)
+            BaseAddress = new Uri(OpenAIEndpoint)
         };
+
         _apiKey = Environment.GetEnvironmentVariable("OpenAI_ApiKey");
         if (string.IsNullOrEmpty(_apiKey))
         {
@@ -29,8 +28,11 @@ internal class OpenAIService
         }
     }
 
+    private static ILogger Logger => Log.Logger;
+    private string OpenAIEndpoint = "https://api.openai.com/v1/";
+
     /// <summary>
-    /// Get speech to text result
+    ///     Get speech to text result
     /// </summary>
     /// <param name="path">Audio file path to process</param>
     /// <param name="language">Specified language</param>
@@ -38,9 +40,9 @@ internal class OpenAIService
     /// <returns></returns>
     public async Task<TranscriptionsResponse?> SpeechToTextAsync(string path, string language = "")
     {
-        if (!CheckApiKey()) return new();
+        if (!CheckApiKey()) return new TranscriptionsResponse();
 
-        using var fileStream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        await using var fileStream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
         using var content = new MultipartFormDataContent
         {
             { new StreamContent(fileStream), "file", Path.GetFileName(path) },
@@ -59,10 +61,10 @@ internal class OpenAIService
         request.Headers.Add("Accept", "application/json");
         request.Headers.Add("Authorization", $"Bearer {_apiKey}");
         request.Content = content;
-        using var response = await _client.SendAsync(request);
+        using HttpResponseMessage response = await _client.SendAsync(request);
         response.EnsureSuccessStatusCode();
 
-        var json = await response.Content.ReadAsStringAsync();
+        string json = await response.Content.ReadAsStringAsync();
         return JsonConvert.DeserializeObject<TranscriptionsResponse>(json);
     }
 

@@ -1,41 +1,44 @@
-﻿using Azure.Storage.Blobs;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text;
+using System.Threading.Tasks;
+using System.Web;
+using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.DurableTask;
-using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
 using Serilog;
 using Serilog.Context;
 using SoundButtons.Models;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Threading.Tasks;
-using System.Text;
+using Log = SoundButtons.Helper.Log;
 
 namespace SoundButtons.Functions;
 
 public class ProcessJson
 {
-    private static ILogger Logger => Helper.Log.Logger;
+    private static ILogger Logger => Log.Logger;
 
     [FunctionName("ProcessJsonFile")]
     public static async Task ProcessJsonFile(
-    [ActivityTrigger] Request request,
-    [Blob("sound-buttons"), StorageAccount("AzureStorage")] BlobContainerClient BlobContainerClient)
+        [ActivityTrigger] Request request,
+        [Blob("sound-buttons")] [StorageAccount("AzureStorage")]
+        BlobContainerClient blobContainerClient)
     {
-        using var _ = LogContext.PushProperty("InstanceId", request.InstanceId);
+        using IDisposable _ = LogContext.PushProperty("InstanceId", request.InstanceId);
         Source source = request.Source;
         string directory = request.Directory;
         string filename = request.Filename;
         string fileExtension = Path.GetExtension(request.TempPath);
         // Get last json file
-        BlobClient jsonBlob = BlobContainerClient.GetBlobClient($"{directory}/{directory}.json");
-        if (!jsonBlob.Exists().Value)
+        BlobClient jsonBlob = blobContainerClient.GetBlobClient($"{directory}/{directory}.json");
+        if (!(await jsonBlob.ExistsAsync()).Value)
         {
             Logger.Fatal("{jsonFile} not found!!", jsonBlob.Name);
             return;
         }
+
         Logger.Information("Read Json file {name}", jsonBlob.Name);
 
         JsonRoot? root;
@@ -44,17 +47,17 @@ public class ProcessJson
         {
             try
             {
-                await jsonBlob.OpenRead().CopyToAsync(ms);
+                await (await jsonBlob.OpenReadAsync()).CopyToAsync(ms);
             }
             catch (OutOfMemoryException)
             {
                 Logger.Error("System.OutOfMemoryException!! Directly try again.");
                 // Retry and let it fail if it comes up again.
-                await jsonBlob.OpenRead(new BlobOpenReadOptions(false)
-                {
-                    BufferSize = 8192,
-                    Position = 0
-                }).CopyToAsync(ms);
+                await (await jsonBlob.OpenReadAsync(new BlobOpenReadOptions(false)
+                          {
+                              BufferSize = 8192,
+                              Position = 0
+                          })).CopyToAsync(ms);
             }
 
             ms.Seek(0, SeekOrigin.Begin);
@@ -63,11 +66,11 @@ public class ProcessJson
                 // Allow trailing commas in JSON
                 FloatParseHandling = FloatParseHandling.Double,
                 // For Unicode and '&' characters
-                StringEscapeHandling = StringEscapeHandling.EscapeHtml,
+                StringEscapeHandling = StringEscapeHandling.EscapeHtml
             };
 
             using var streamReader = new StreamReader(ms);
-            using var jsonReader = new JsonTextReader(streamReader);
+            await using var jsonReader = new JsonTextReader(streamReader);
             var serializer = JsonSerializer.CreateDefault(serializerSettings);
             root = serializer.Deserialize<JsonRoot>(jsonReader);
         }
@@ -75,11 +78,11 @@ public class ProcessJson
         if (null == root)
         {
             Logger.Fatal("{jsonFile} is json invalid!!", jsonBlob.Name);
-            return; 
+            return;
         }
 
         // Get new json file block
-        BlobClient newjsonBlob = BlobContainerClient.GetBlobClient($"{directory}/UploadJson/{DateTime.Now:yyyy-MM-dd-HH-mm}.json");
+        BlobClient newJsonBlob = blobContainerClient.GetBlobClient($"{directory}/UploadJson/{DateTime.Now:yyyy-MM-dd-HH-mm}.json");
 
         // Generate new json file
         JsonRoot json = UpdateJson(root,
@@ -87,15 +90,16 @@ public class ProcessJson
                                    filename + fileExtension,
                                    request,
                                    source
-                                   );
+        );
+
         byte[] result = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(json, Formatting.Indented));
 
         Logger.Information("Write Json {name}", jsonBlob.Name);
-        Logger.Information("Write Json backup {name}", newjsonBlob.Name);
+        Logger.Information("Write Json backup {name}", newJsonBlob.Name);
 
         // Write new json file
         var option = new BlobUploadOptions { HttpHeaders = new BlobHttpHeaders { ContentType = "application/json" } };
-        await Task.WhenAll(newjsonBlob.UploadAsync(new BinaryData(result), option),
+        await Task.WhenAll(newJsonBlob.UploadAsync(new BinaryData(result), option),
                            jsonBlob.UploadAsync(new BinaryData(result), option));
     }
 
@@ -104,12 +108,12 @@ public class ProcessJson
         Logger.Information("Update Json");
 
         // Variables prepare
-        string baseRoute = $"https://soundbuttons.blob.core.windows.net/sound-buttons/{directory}/";
+        var baseRoute = $"https://soundbuttons.blob.core.windows.net/sound-buttons/{directory}/";
 
         string group = request.Group;
 
-        // Get ButtonGrop if exists, or new one
-        ButtonGroup? buttonGroup = root.ButtonGroups.Find(p=>p.Name?.ZhTw == group || p.Name?.Ja == group);
+        // Get ButtonGroup if exists, or new one
+        ButtonGroup? buttonGroup = root.ButtonGroups.Find(p => p.Name?.ZhTw == group || p.Name?.Ja == group);
         if (buttonGroup == null)
         {
             buttonGroup = new ButtonGroup
@@ -118,27 +122,28 @@ public class ProcessJson
                 BaseRoute = baseRoute,
                 Buttons = new List<Button>()
             };
+
             root.ButtonGroups.Add(buttonGroup);
         }
-        else if (null != buttonGroup.Name && string.IsNullOrEmpty(buttonGroup.Name.Ja))
+        else if (string.IsNullOrEmpty(buttonGroup.Name.Ja))
         {
             buttonGroup.Name.Ja = buttonGroup.Name.ZhTw;
         }
 
         // Prevent script injection
-        source.VideoId = System.Web.HttpUtility.UrlEncode(source.VideoId);
+        source.VideoId = HttpUtility.UrlEncode(source.VideoId);
 
         // Add button
 
         buttonGroup.Buttons.Add(new Button(
-            filename,
-            new Text(
-                request.NameZH,
-                request.NameJP
-            ),
-            request.Volume,
-            source
-        ));
+                                    filename,
+                                    new Text(
+                                        request.NameZH,
+                                        request.NameJP
+                                    ),
+                                    request.Volume,
+                                    source
+                                ));
 
         return root;
     }

@@ -1,6 +1,8 @@
-﻿using Serilog;
+﻿using System;
+using Serilog;
+using Serilog.Core;
+using Serilog.Debugging;
 using Serilog.Events;
-using System;
 
 namespace SoundButtons.Helper;
 
@@ -13,20 +15,21 @@ internal static class Log
         get
         {
             if (null == _logger
-                || _logger.GetType() != typeof(Serilog.Core.Logger))
+                || _logger.GetType() != typeof(Logger))
             {
                 _logger = MakeLogger();
             }
+
             return _logger;
         }
         set => _logger = value;
     }
 
-    public static ILogger MakeLogger()
+    private static ILogger MakeLogger()
     {
-        Serilog.Debugging.SelfLog.Enable(msg => Console.WriteLine(msg));
+        SelfLog.Enable(Console.WriteLine);
 
-        var logger = new LoggerConfiguration()
+        Logger logger = new LoggerConfiguration()
                         .MinimumLevel.Verbose()
                         .MinimumLevel.Override("Microsoft", LogEventLevel.Fatal)
                         .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Fatal)
@@ -38,6 +41,7 @@ internal static class Log
                                      restrictedToMinimumLevel: LogEventLevel.Verbose)
                         .Enrich.FromLogContext()
                         .CreateLogger();
+
         return logger;
     }
 }

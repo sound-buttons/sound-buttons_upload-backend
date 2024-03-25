@@ -1,3 +1,9 @@
+using System;
+using System.IO;
+using System.Linq;
+using System.Net.Http;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.WebJobs;
@@ -7,22 +13,18 @@ using Serilog;
 using Serilog.Context;
 using SoundButtons.Helper;
 using SoundButtons.Models;
-using System;
-using System.IO;
-using System.Linq;
-using System.Net.Http;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
+using Log = SoundButtons.Helper.Log;
 
 namespace SoundButtons;
 
 public class SoundButtons
 {
-    private static ILogger Logger => Helper.Log.Logger;
+    private static ILogger Logger => Log.Logger;
 
     [FunctionName("sound-buttons")]
     public static async Task<IActionResult> HttpStart(
-        [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)]
+        HttpRequest req,
         [DurableClient] IDurableOrchestrationClient starter)
     {
         Logger.Information("Content-Type: {contentType}", req.ContentType);
@@ -44,17 +46,29 @@ public class SoundButtons
                                        ip: req.Headers.FirstOrDefault(x => x.Key == "X-Forwarded-For").Value.FirstOrDefault() ?? "",
                                        nameZH: req.Form.GetFirstValue("nameZH") ?? "",
                                        nameJP: req.Form.GetFirstValue("nameJP") ?? "",
-                                       volume: float.TryParse(req.Form.GetFirstValue("volume"), out var volume) ? volume : 1,
+                                       volume: float.TryParse(req.Form.GetFirstValue("volume"), out float volume) ? volume : 1,
                                        group: req.Form.GetFirstValue("group") ?? "未分類");
     }
 
-    private static async Task<IActionResult> StartOrchestrator(HttpRequest req, IDurableOrchestrationClient starter, string filename, string directory, Source source, string? clip, string toastId, string tempPath, string ip, string nameZH, string nameJP, float volume, string group)
+    private static async Task<IActionResult> StartOrchestrator(HttpRequest req,
+                                                               IDurableOrchestrationClient starter,
+                                                               string filename,
+                                                               string directory,
+                                                               Source source,
+                                                               string? clip,
+                                                               string toastId,
+                                                               string tempPath,
+                                                               string ip,
+                                                               string nameZH,
+                                                               string nameJP,
+                                                               float volume,
+                                                               string group)
     {
-        string instanceId = Guid.NewGuid().ToString();
+        var instanceId = Guid.NewGuid().ToString();
         await starter.StartNewAsync(
             orchestratorFunctionName: "main-sound-buttons",
             instanceId: instanceId,
-            input: new Request()
+            input: new Request
             {
                 Directory = directory,
                 Filename = filename,
@@ -82,6 +96,7 @@ public class SoundButtons
         filename = Regex.Replace(filename, @"[^0-9a-zA-Z\p{L}]+", ""); // 比對通過英數、中日文字等(多位元組字元)
         if (filename.Length == 0)
             filename = Guid.NewGuid().ToString("n");
+
         Logger.Information("FileName: {filename}", filename);
         return filename;
     }
@@ -94,6 +109,7 @@ public class SoundButtons
             Start = 0,
             End = 0
         };
+
         if (double.TryParse(req.Form.GetFirstValue("start"), out double start)
             && double.TryParse(req.Form.GetFirstValue("end"), out double end))
         {
@@ -103,7 +119,7 @@ public class SoundButtons
 
         if (!string.IsNullOrEmpty(source.VideoId) && source.VideoId.StartsWith("http"))
         {
-            // Regex for strip youtube video id from url c# and returl default thumbnail
+            // Regex for strip youtube video id from url c# and return default thumbnail
             // https://gist.github.com/Flatlineato/f4cc3f3937272646d4b0
             source.VideoId = Regex.Match(
                 source.VideoId,
@@ -118,6 +134,7 @@ public class SoundButtons
                 source.End = 0;
                 Logger.Error("Discard unknown source: {source}", source.VideoId);
             }
+
             Logger.Information("Get info from form: {videoId}, {start}, {end}", source.VideoId, source.Start, source.End);
         }
 
@@ -155,7 +172,7 @@ public class SoundButtons
         if (!string.IsNullOrEmpty(clip) && clipReg.IsMatch(clip))
         {
             using HttpClient client = new();
-            var response = await client.GetAsync(clip);
+            HttpResponseMessage response = await client.GetAsync(clip);
             string body = await response.Content.ReadAsStringAsync();
 
             // "clipConfig":{"postId":"UgkxVQpxshiN76QUwblPu-ggj6fl594-ORiU","startTimeMs":"1891037","endTimeMs":"1906037"}
@@ -197,44 +214,50 @@ public class SoundButtons
             return await ProcessAudioFromFileUpload(files);
         }
         // source檢核
-        else if (string.IsNullOrEmpty(source.VideoId)
-                 || source.End - source.Start <= 0
-                 || source.End - source.Start > 180)
+
+        if (string.IsNullOrEmpty(source.VideoId)
+            || source.End - source.Start <= 0
+            || source.End - source.Start > 180)
         {
             Logger.Error("video time invalid: {start}, {end}", source.Start, source.End);
             throw new Exception($"video time invalid: {source.Start}, {source.End}");
         }
+
         return "";
     }
 
     private static async Task<string> ProcessAudioFromFileUpload(IFormFileCollection files)
     {
-        var tempDir = Helper.FileHelper.PrepareTempDir();
-        string tempPath = Path.Combine(tempDir, DateTime.Now.Ticks.ToString() + ".tmp");
+        string tempDir = FileHelper.PrepareTempDir();
+        string tempPath = Path.Combine(tempDir, DateTime.Now.Ticks + ".tmp");
 
         Logger.Information("Get file from form post.");
 
         // 有音檔，直接寫到暫存路徑使用
         IFormFile file = files[0];
         // Get file info
-        var _fileExtension = Path.GetExtension(file.FileName) ?? "";
-        tempPath = Path.ChangeExtension(tempPath, _fileExtension);
-        Logger.Information("Get extension: {fileExtension}", _fileExtension);
-        using (var fs = new FileStream(tempPath, FileMode.OpenOrCreate, FileAccess.Write))
+        string fileExtension = Path.GetExtension(file.FileName) ?? "";
+        tempPath = Path.ChangeExtension(tempPath, fileExtension);
+        Logger.Information("Get extension: {fileExtension}", fileExtension);
+        await using (var fs = new FileStream(tempPath, FileMode.OpenOrCreate, FileAccess.Write))
         {
-            file.CopyTo(fs);
+            await file.CopyToAsync(fs);
             Logger.Information("Write file from upload.");
         }
 
-        return _fileExtension == ".webm"
-            ? tempPath
-            : await ProcessAudioHelper.TranscodeAudioAsync(tempPath);
+        return fileExtension == ".webm"
+                   ? tempPath
+                   : await ProcessAudioHelper.TranscodeAudioAsync(tempPath);
     }
 
     private static void CleanUp(string tempPath)
     {
-        var path = Path.GetDirectoryName(tempPath);
-        if (path == null) { return; }
+        string? path = Path.GetDirectoryName(tempPath);
+        if (path == null)
+        {
+            return;
+        }
+
         Directory.Delete(path, true);
     }
 
@@ -243,7 +266,7 @@ public class SoundButtons
         [OrchestrationTrigger] IDurableOrchestrationContext context)
     {
         Request request = context.GetInput<Request>();
-        using var _ = LogContext.PushProperty("InstanceId", request.InstanceId);
+        using IDisposable _ = LogContext.PushProperty("InstanceId", request.InstanceId);
 
         // 若表單有音檔，前一步驟會把檔案放入這個路徑
         if (string.IsNullOrEmpty(request.TempPath))

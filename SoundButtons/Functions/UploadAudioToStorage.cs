@@ -1,27 +1,29 @@
-﻿using Azure.Storage.Blobs;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading.Tasks;
+using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.DurableTask;
 using Serilog;
 using Serilog.Context;
 using SoundButtons.Models;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Threading.Tasks;
+using Log = SoundButtons.Helper.Log;
 
 namespace SoundButtons.Functions;
 
 public class UploadAudioToStorage
 {
-    private static ILogger Logger => Helper.Log.Logger;
+    private static ILogger Logger => Log.Logger;
 
     [FunctionName("UploadAudioToStorageAsync")]
     public async Task<Request> UploadAudioToStorageAsync(
-           [ActivityTrigger] Request request,
-           [Blob("sound-buttons"), StorageAccount("AzureStorage")] BlobContainerClient blobContainerClient)
+        [ActivityTrigger] Request request,
+        [Blob("sound-buttons")] [StorageAccount("AzureStorage")]
+        BlobContainerClient blobContainerClient)
     {
-        using var _ = LogContext.PushProperty("InstanceId", request.InstanceId);
+        using IDisposable _ = LogContext.PushProperty("InstanceId", request.InstanceId);
         string ip = request.Ip;
         string filename = request.Filename;
         string directory = request.Directory;
@@ -30,11 +32,12 @@ public class UploadAudioToStorage
 
         // Get a new file name on blob storage
         BlobClient cloudBlockBlob = blobContainerClient.GetBlobClient($"{directory}/{filename + fileExtension}");
-        if (cloudBlockBlob.Exists())
+        if (await cloudBlockBlob.ExistsAsync())
         {
             filename += $"_{DateTime.Now.Ticks}";
             cloudBlockBlob = blobContainerClient.GetBlobClient($"{directory}/{filename + fileExtension}");
         }
+
         request.Filename = filename;
         Logger.Information($"Filename: {filename + fileExtension}");
 
@@ -49,8 +52,10 @@ public class UploadAudioToStorage
             {
                 { "sourceIp", ip }
             };
+
             await cloudBlockBlob.SetMetadataAsync(metadata);
         }
+
         return request;
     }
 }
