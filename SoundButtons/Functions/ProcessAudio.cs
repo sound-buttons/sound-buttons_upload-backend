@@ -39,7 +39,7 @@ public class ProcessAudio
             await ProcessAudioHelper.DownloadAudioAsync(youtubeDLPath, tempPath, request.Source);
             await ProcessAudioHelper.CutAudioAsync(tempPath, request.Source);
         }
-        else
+        else if (!string.IsNullOrEmpty(request.Clip))
         {
             await ProcessAudioHelper.DownloadAudioAsync(youtubeDLPath, tempPath, request.Clip);
         }

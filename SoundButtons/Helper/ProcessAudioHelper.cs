@@ -64,6 +64,8 @@ internal static class ProcessAudioHelper
 
     internal static Task<int> DownloadAudioAsync(string youtubeDLPath, string tempPath, Source source)
     {
+        if (string.IsNullOrEmpty(source.VideoId)) throw new ArgumentNullException(nameof(source));
+
         OptionSet optionSet = new()
         {
             // 最佳音質
@@ -95,6 +97,8 @@ internal static class ProcessAudioHelper
 
     internal static Task<int> DownloadAudioAsync(string youtubeDLPath, string tempPath, string url)
     {
+        if (string.IsNullOrEmpty(url)) throw new ArgumentNullException(nameof(url));
+
         OptionSet optionSet = new()
         {
             NoCheckCertificates = true,

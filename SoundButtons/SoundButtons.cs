@@ -31,7 +31,15 @@ public class SoundButtons
         if (!req.ContentType.Contains("multipart/form-data;"))
             return new BadRequestResult();
 
-        Source source = GetSourceInfo(req);
+        Source source = SourceCheck(GetSourceInfo(req));
+
+        if (string.IsNullOrEmpty(source.VideoId)
+            && string.IsNullOrEmpty(req.Form.GetFirstValue("clip"))
+            && req.Form.Files.Count == 0)
+        {
+            Logger.Error("No source found.");
+            return new BadRequestResult();
+        }
 
         // 啟動長輪詢
         return await StartOrchestrator(req: req,
@@ -213,17 +221,27 @@ public class SoundButtons
         {
             return await ProcessAudioFromFileUpload(files);
         }
-        // source檢核
-
-        if (string.IsNullOrEmpty(source.VideoId)
-            || source.End - source.Start <= 0
-            || source.End - source.Start > 180)
-        {
-            Logger.Error("video time invalid: {start}, {end}", source.Start, source.End);
-            throw new Exception($"video time invalid: {source.Start}, {source.End}");
-        }
 
         return "";
+    }
+
+    private static Source SourceCheck(Source source)
+    {
+        if (string.IsNullOrEmpty(source.VideoId))
+        {
+            source.Start = 0;
+            source.End = 0;
+            return source;
+        }
+
+        if (source.End - source.Start <= 0
+            || source.End - source.Start > 180)
+        {
+            Logger.Error("Video time invalid: {start}, {end}", source.Start, source.End);
+            throw new Exception($"Video time invalid: {source.Start}, {source.End}");
+        }
+
+        return source;
     }
 
     private static async Task<string> ProcessAudioFromFileUpload(IFormFileCollection files)
