@@ -168,7 +168,7 @@ internal static class ProcessAudioHelper
 
         IConversion conversion = FFmpeg.Conversions.New()
                                        .AddStream(mediaInfo.Streams)
-                                       .AddParameter("-map 0:a")
+                                       .AddParameter("-map -0:v")
                                        .SetOutput(outputPath)
                                        .SetOverwriteOutput(true);
 
