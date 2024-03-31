@@ -263,9 +263,7 @@ public class SoundButtons
             Logger.Information("Write file from upload.");
         }
 
-        return fileExtension == ".webm"
-                   ? tempPath
-                   : await ProcessAudioHelper.TranscodeAudioAsync(tempPath);
+        return await ProcessAudioHelper.TranscodeAudioAsync(tempPath);
     }
 
     private static void CleanUp(string tempPath)
