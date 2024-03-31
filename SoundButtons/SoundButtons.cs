@@ -41,6 +41,13 @@ public class SoundButtons
             return new BadRequestResult();
         }
 
+        if (req.Form.Files.Any()
+            && req.Form.Files[0].Length > 30 * 1024 * 1024)
+        {
+            Logger.Error("File size over 30MB.");
+            return new BadRequestResult();
+        }
+
         // 啟動長輪詢
         return await StartOrchestrator(req: req,
                                        starter: starter,
@@ -177,28 +184,29 @@ public class SoundButtons
     {
         string? clip = req.Form.GetFirstValue("clip");
         Regex clipReg = new(@"https?:\/\/(?:[\w-]+\.)?(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/)clip\/[?=&+%\w.-]*");
-        if (!string.IsNullOrEmpty(clip) && clipReg.IsMatch(clip))
+
+        if (string.IsNullOrEmpty(clip) || !clipReg.IsMatch(clip))
+            return clip;
+
+        using HttpClient client = new();
+        HttpResponseMessage response = await client.GetAsync(clip);
+        string body = await response.Content.ReadAsStringAsync();
+
+        // "clipConfig":{"postId":"UgkxVQpxshiN76QUwblPu-ggj6fl594-ORiU","startTimeMs":"1891037","endTimeMs":"1906037"}
+        Regex reg1 = new(@"clipConfig"":{""postId"":""(?:[\w-]+)"",""startTimeMs"":""(\d+)"",""endTimeMs"":""(\d+)""}");
+        Match match1 = reg1.Match(body);
+        if (double.TryParse(match1.Groups[1].Value, out double _start)
+            && double.TryParse(match1.Groups[2].Value, out double _end))
         {
-            using HttpClient client = new();
-            HttpResponseMessage response = await client.GetAsync(clip);
-            string body = await response.Content.ReadAsStringAsync();
-
-            // "clipConfig":{"postId":"UgkxVQpxshiN76QUwblPu-ggj6fl594-ORiU","startTimeMs":"1891037","endTimeMs":"1906037"}
-            Regex reg1 = new(@"clipConfig"":{""postId"":""(?:[\w-]+)"",""startTimeMs"":""(\d+)"",""endTimeMs"":""(\d+)""}");
-            Match match1 = reg1.Match(body);
-            if (double.TryParse(match1.Groups[1].Value, out double _start)
-                && double.TryParse(match1.Groups[2].Value, out double _end))
-            {
-                source.Start = _start / 1000;
-                source.End = _end / 1000;
-            }
-
-            // {"videoId":"Gs7QYATahy4"}
-            Regex reg2 = new(@"{""videoId"":""([\w-]+)""");
-            Match match2 = reg2.Match(body);
-            source.VideoId = match2.Groups[1].Value;
-            Logger.Information("Get info from clip: {videoId}, {start}, {end}", source.VideoId, source.Start, source.End);
+            source.Start = _start / 1000;
+            source.End = _end / 1000;
         }
+
+        // {"videoId":"Gs7QYATahy4"}
+        Regex reg2 = new(@"{""videoId"":""([\w-]+)""");
+        Match match2 = reg2.Match(body);
+        source.VideoId = match2.Groups[1].Value;
+        Logger.Information("Get info from clip: {videoId}, {start}, {end}", source.VideoId, source.Start, source.End);
 
         return clip;
     }
@@ -217,12 +225,9 @@ public class SoundButtons
     {
         IFormFileCollection files = req.Form.Files;
         Logger.Information("Files Count: {fileCount}", files.Count);
-        if (files.Count > 0)
-        {
-            return await ProcessAudioFromFileUpload(files);
-        }
-
-        return "";
+        return files.Count > 0
+                   ? await ProcessAudioFromFileUpload(files)
+                   : "";
     }
 
     private static Source SourceCheck(Source source)
