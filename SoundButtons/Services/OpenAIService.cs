@@ -2,34 +2,29 @@
 using System.IO;
 using System.Net.Http;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
-using Serilog;
 using static SoundButtons.Models.OpenAI;
-using Log = SoundButtons.Helper.Log;
 
 namespace SoundButtons.Services;
 
-internal class OpenAIService
+public class OpenAIService
 {
+    private const string OpenAiEndpoint = "https://api.openai.com/v1/";
     private static string? _apiKey = "";
     private readonly HttpClient _client;
 
-    public OpenAIService()
+    public OpenAIService(ILogger<OpenAIService> logger, IHttpClientFactory httpClientFactory)
     {
-        _client = new HttpClient
-        {
-            BaseAddress = new Uri(OpenAIEndpoint)
-        };
+        _client = httpClientFactory.CreateClient("client");
+        _client.BaseAddress = new Uri(OpenAiEndpoint);
 
         _apiKey = Environment.GetEnvironmentVariable("OpenAI_ApiKey");
         if (string.IsNullOrEmpty(_apiKey))
         {
-            Logger.Fatal("OpenAI api key is not set.");
+            logger.LogCritical("OpenAI api key is not set.");
         }
     }
-
-    private static ILogger Logger => Log.Logger;
-    private string OpenAIEndpoint = "https://api.openai.com/v1/";
 
     /// <summary>
     ///     Get speech to text result

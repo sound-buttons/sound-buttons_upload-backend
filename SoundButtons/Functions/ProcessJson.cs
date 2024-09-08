@@ -6,25 +6,30 @@ using System.Threading.Tasks;
 using System.Web;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
-using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Extensions.DurableTask;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Extensions.Azure;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
-using Serilog;
 using Serilog.Context;
 using SoundButtons.Models;
-using Log = SoundButtons.Helper.Log;
 
 namespace SoundButtons.Functions;
 
 public class ProcessJson
 {
-    private static ILogger Logger => Log.Logger;
+    private readonly BlobContainerClient _blobContainerClient;
+    private readonly ILogger<ProcessJson> _logger;
 
-    [FunctionName("ProcessJsonFile")]
-    public static async Task ProcessJsonFile(
-        [ActivityTrigger] Request request,
-        [Blob("sound-buttons")] [StorageAccount("AzureStorage")]
-        BlobContainerClient blobContainerClient)
+    public ProcessJson(ILogger<ProcessJson> logger, IAzureClientFactory<BlobServiceClient> blobClientFactory)
+    {
+        _logger = logger;
+        _blobContainerClient = blobClientFactory.CreateClient("sound-buttons").GetBlobContainerClient("sound-buttons");
+        _blobContainerClient.CreateIfNotExists();
+    }
+
+    [Function("ProcessJsonFile")]
+    public async Task ProcessJsonFile(
+        [ActivityTrigger] Request request)
     {
         using IDisposable _ = LogContext.PushProperty("InstanceId", request.InstanceId);
         Source source = request.Source;
@@ -32,14 +37,14 @@ public class ProcessJson
         string filename = request.Filename;
         string fileExtension = Path.GetExtension(request.TempPath);
         // Get last json file
-        BlobClient jsonBlob = blobContainerClient.GetBlobClient($"{directory}/{directory}.json");
+        BlobClient jsonBlob = _blobContainerClient.GetBlobClient($"{directory}/{directory}.json");
         if (!(await jsonBlob.ExistsAsync()).Value)
         {
-            Logger.Fatal("{jsonFile} not found!!", jsonBlob.Name);
+            _logger.LogCritical("{jsonFile} not found!!", jsonBlob.Name);
             return;
         }
 
-        Logger.Information("Read Json file {name}", jsonBlob.Name);
+        _logger.LogInformation("Read Json file {name}", jsonBlob.Name);
 
         JsonRoot? root;
         // Read last json file
@@ -51,7 +56,7 @@ public class ProcessJson
             }
             catch (OutOfMemoryException)
             {
-                Logger.Error("System.OutOfMemoryException!! Directly try again.");
+                _logger.LogError("System.OutOfMemoryException!! Directly try again.");
                 // Retry and let it fail if it comes up again.
                 await (await jsonBlob.OpenReadAsync(new BlobOpenReadOptions(false)
                           {
@@ -77,12 +82,12 @@ public class ProcessJson
 
         if (null == root)
         {
-            Logger.Fatal("{jsonFile} is json invalid!!", jsonBlob.Name);
+            _logger.LogCritical("{jsonFile} is json invalid!!", jsonBlob.Name);
             return;
         }
 
         // Get new json file block
-        BlobClient newJsonBlob = blobContainerClient.GetBlobClient($"{directory}/UploadJson/{DateTime.Now:yyyy-MM-dd-HH-mm}.json");
+        BlobClient newJsonBlob = _blobContainerClient.GetBlobClient($"{directory}/UploadJson/{DateTime.Now:yyyy-MM-dd-HH-mm}.json");
 
         // Generate new json file
         JsonRoot json = UpdateJson(root,
@@ -94,8 +99,8 @@ public class ProcessJson
 
         byte[] result = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(json, Formatting.Indented));
 
-        Logger.Information("Write Json {name}", jsonBlob.Name);
-        Logger.Information("Write Json backup {name}", newJsonBlob.Name);
+        _logger.LogInformation("Write Json {name}", jsonBlob.Name);
+        _logger.LogInformation("Write Json backup {name}", newJsonBlob.Name);
 
         // Write new json file
         var option = new BlobUploadOptions { HttpHeaders = new BlobHttpHeaders { ContentType = "application/json" } };
@@ -103,9 +108,9 @@ public class ProcessJson
                            jsonBlob.UploadAsync(new BinaryData(result), option));
     }
 
-    private static JsonRoot UpdateJson(JsonRoot root, string directory, string filename, Request request, Source source)
+    private JsonRoot UpdateJson(JsonRoot root, string directory, string filename, Request request, Source source)
     {
-        Logger.Information("Update Json");
+        _logger.LogInformation("Update Json");
 
         // Variables prepare
         var baseRoute = $"https://soundbuttons.blob.core.windows.net/sound-buttons/{directory}/";

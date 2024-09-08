@@ -1,27 +1,25 @@
 using System;
 using System.Net.Http;
 using System.Threading.Tasks;
-using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Extensions.DurableTask;
-using Serilog;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Extensions.Logging;
 using Serilog.Context;
 using SoundButtons.Models;
 using SoundButtons.Services;
-using Log = SoundButtons.Helper.Log;
 
 namespace SoundButtons.Functions;
 
-public class SpeechToText
+public class SpeechToText(ILogger<SpeechToText> logger,
+                          OpenAIService openAIService)
 {
-    private static ILogger Logger => Log.Logger;
+    private readonly ILogger _logger = logger;
 
-    [FunctionName(nameof(SpeechToTextAsync))]
+    [Function(nameof(SpeechToTextAsync))]
     public async Task<Request> SpeechToTextAsync(
         [ActivityTrigger] Request request)
     {
         using IDisposable _ = LogContext.PushProperty("InstanceId", request.InstanceId);
-        Logger.Information("Start to do speech to text.");
-        var openAIService = new OpenAIService();
+        _logger.LogInformation("Start to do speech to text.");
         try
         {
             if (request.NameJP == "[useSTT]")
@@ -33,7 +31,7 @@ public class SpeechToText
         }
         catch (HttpRequestException e)
         {
-            Logger.Error(e, "Failed to get STT ja response.");
+            _logger.LogError(e, "Failed to get STT ja response.");
         }
 
         return request;

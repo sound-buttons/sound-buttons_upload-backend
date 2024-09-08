@@ -4,24 +4,29 @@ using System.IO;
 using System.Threading.Tasks;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
-using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Extensions.DurableTask;
-using Serilog;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Extensions.Azure;
+using Microsoft.Extensions.Logging;
 using Serilog.Context;
 using SoundButtons.Models;
-using Log = SoundButtons.Helper.Log;
 
 namespace SoundButtons.Functions;
 
 public class UploadAudioToStorage
 {
-    private static ILogger Logger => Log.Logger;
+    private readonly BlobContainerClient _blobContainerClient;
+    private readonly ILogger _logger;
 
-    [FunctionName("UploadAudioToStorageAsync")]
+    public UploadAudioToStorage(ILogger<UploadAudioToStorage> logger, IAzureClientFactory<BlobServiceClient> blobClientFactory)
+    {
+        _logger = logger;
+        _blobContainerClient = blobClientFactory.CreateClient("sound-buttons").GetBlobContainerClient("sound-buttons");
+        _blobContainerClient.CreateIfNotExists();
+    }
+
+    [Function("UploadAudioToStorageAsync")]
     public async Task<Request> UploadAudioToStorageAsync(
-        [ActivityTrigger] Request request,
-        [Blob("sound-buttons")] [StorageAccount("AzureStorage")]
-        BlobContainerClient blobContainerClient)
+        [ActivityTrigger] Request request)
     {
         using IDisposable _ = LogContext.PushProperty("InstanceId", request.InstanceId);
         string ip = request.Ip;
@@ -31,20 +36,20 @@ public class UploadAudioToStorage
         string fileExtension = Path.GetExtension(tempPath);
 
         // Get a new file name on blob storage
-        BlobClient cloudBlockBlob = blobContainerClient.GetBlobClient($"{directory}/{filename + fileExtension}");
+        BlobClient cloudBlockBlob = _blobContainerClient.GetBlobClient($"{directory}/{filename + fileExtension}");
         if (await cloudBlockBlob.ExistsAsync())
         {
             filename += $"_{DateTime.Now.Ticks}";
-            cloudBlockBlob = blobContainerClient.GetBlobClient($"{directory}/{filename + fileExtension}");
+            cloudBlockBlob = _blobContainerClient.GetBlobClient($"{directory}/{filename + fileExtension}");
         }
 
         request.Filename = filename;
-        Logger.Information($"Filename: {filename + fileExtension}");
+        _logger.LogInformation($"Filename: {filename + fileExtension}");
 
         // Write audio file 
-        Logger.Information("Start to upload audio to blob storage {name}", blobContainerClient.Name);
+        _logger.LogInformation("Start to upload audio to blob storage {name}", _blobContainerClient.Name);
         await cloudBlockBlob.UploadAsync(tempPath, new BlobUploadOptions { HttpHeaders = new BlobHttpHeaders { ContentType = "audio/webm" } });
-        Logger.Information("Upload audio to azure finish.");
+        _logger.LogInformation("Upload audio to azure finish.");
 
         if (null != ip)
         {
