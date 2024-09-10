@@ -10,8 +10,8 @@ public class Utility(ILogger<Utility> logger)
 {
     private readonly ILogger _logger = logger;
 
-    [Function(nameof(Wake))]
-    public IActionResult Wake([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "wake")] HttpRequest req)
+    [Function(nameof(Healthz))]
+    public IActionResult Healthz([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "healthz")] HttpRequest req)
     {
         Wake();
         return new OkResult();
