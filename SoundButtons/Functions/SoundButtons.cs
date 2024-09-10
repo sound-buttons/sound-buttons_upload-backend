@@ -16,10 +16,12 @@ using Microsoft.Net.Http.Headers;
 using Serilog.Context;
 using SoundButtons.Helper;
 using SoundButtons.Models;
+using SoundButtons.Services;
 
 namespace SoundButtons.Functions;
 
-public class SoundButtons(ILogger<SoundButtons> logger)
+public class SoundButtons(ILogger<SoundButtons> logger,
+                          ProcessAudioService processAudioService)
 {
     private readonly ILogger _logger = logger;
 
@@ -322,10 +324,10 @@ public class SoundButtons(ILogger<SoundButtons> logger)
 
         _logger.LogInformation("Write file from upload.");
 
-        return await ProcessAudioHelper.TranscodeAudioAsync(tempPath);
+        return await processAudioService.TranscodeAudioAsync(tempPath);
     }
 
-    private void CleanUp(string tempPath)
+    private static void CleanUp(string tempPath)
     {
         string? path = Path.GetDirectoryName(tempPath);
         if (path == null)

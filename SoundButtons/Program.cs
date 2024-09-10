@@ -61,6 +61,7 @@ IHost host = new HostBuilder()
 
                  services.AddSingleton(logger);
                  services.AddScoped(typeof(OpenAIService));
+                 services.AddScoped(typeof(ProcessAudioService));
              })
              .Build();
 

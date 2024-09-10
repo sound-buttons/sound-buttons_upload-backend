@@ -6,10 +6,12 @@ using Microsoft.Extensions.Logging;
 using Serilog.Context;
 using SoundButtons.Helper;
 using SoundButtons.Models;
+using SoundButtons.Services;
 
 namespace SoundButtons.Functions;
 
-public class ProcessAudio(ILogger<ProcessAudio> logger)
+public class ProcessAudio(ILogger<ProcessAudio> logger,
+                          ProcessAudioService processAudioService)
 {
     [Function("ProcessAudioAsync")]
     public async Task<string> ProcessAudioAsync(
@@ -21,20 +23,14 @@ public class ProcessAudio(ILogger<ProcessAudio> logger)
 
         logger.LogInformation("TempDir: {tempDir}", tempDir);
 
-        Task task1 = ProcessAudioHelper.UpdateFFmpegAsync(tempDir);
-        Task<string> task2 = ProcessAudioHelper.UpdateYtdlpAsync(tempDir);
-
-        await Task.WhenAll(task1, task2);
-        string youtubeDLPath = task2.Result;
-
         if (!string.IsNullOrEmpty(request.Source.VideoId))
         {
-            await ProcessAudioHelper.DownloadAudioAsync(youtubeDLPath, tempPath, request.Source);
-            await ProcessAudioHelper.CutAudioAsync(tempPath, request.Source);
+            await processAudioService.DownloadAudioAsync(tempPath, request.Source);
+            await processAudioService.CutAudioAsync(tempPath, request.Source);
         }
         else if (!string.IsNullOrEmpty(request.Clip))
         {
-            await ProcessAudioHelper.DownloadAudioAsync(youtubeDLPath, tempPath, request.Clip);
+            await processAudioService.DownloadAudioAsync(tempPath, request.Clip);
         }
 
         return tempPath;
