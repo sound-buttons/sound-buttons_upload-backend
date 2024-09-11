@@ -31,7 +31,7 @@ public class ProcessAudioService
         OptionSet optionSet = new()
         {
             // 最佳音質
-            Format = "251",
+            Format = "251/140",
             NoCheckCertificates = true,
             Output = tempPath,
             ExtractorArgs = "youtube:skip=dash",
@@ -52,7 +52,7 @@ public class ProcessAudioService
         _logger.LogDebug("yt-dlp arguments: {arguments}", optionSet.ToString());
 
         return youtubeDLProcess.RunAsync(
-            new[] { $"https://youtu.be/{source.VideoId}" },
+            [$"https://youtu.be/{source.VideoId}"],
             optionSet,
             new CancellationToken());
     }
@@ -81,7 +81,7 @@ public class ProcessAudioService
         _logger.LogDebug("yt-dlp arguments: {arguments}", optionSet.ToString());
 
         return youtubeDLProcess.RunAsync(
-            new[] { url },
+            [url],
             optionSet,
             new CancellationToken());
     }
