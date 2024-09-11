@@ -1,0 +1,68 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "soundbuttons.fullname" . }}-backend
+  namespace: {{ .Release.Namespace }}
+  labels:
+  {{- include "soundbuttons.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.kubernetes.backend.replicas }}
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: soundbuttonsbackend
+    {{- include "soundbuttons.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app: soundbuttonsbackend
+      {{- include "soundbuttons.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+      - name: soundbuttonsbackend
+        securityContext:
+          runAsUser: 1001
+          runAsGroup: 0
+          allowPrivilegeEscalation: false
+        image: {{ .Values.kubernetes.backend.image }}
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        resources: {{- toYaml .Values.kubernetes.backend.resources | nindent 10 }}
+        env:
+        - name: FUNCTIONS_WORKER_RUNTIME
+          value: dotnet-isolated
+        - name: AzureWebJobsStorage
+          value: "UseDevelopmentStorage=true"
+        - name: Seq_ServerUrl
+          value: {{ quote .Values.seq.serverUrl }}
+        - name: Seq_ApiKey
+          value: {{ quote .Values.seq.apiKey }}
+        - name: AzureStorage
+          value: {{ quote .Values.azureStorage.connectionString }}
+        - name: OpenAI_ApiKey
+          value: {{ quote .Values.OpenAI.apiKey }}
+        - name: KUBERNETES_CLUSTER_DOMAIN
+          value: {{ quote .Values.kubernetes.clusterDomain }}
+        # Issue: Azure Durable Function HttpStart failure: Webhooks are not configured
+        # https://stackoverflow.com/a/64404153/8706033
+        - name: WEBSITE_HOSTNAME
+          value: {{ quote .Values.host }}
+        livenessProbe:
+          httpGet:
+            path: /api/healthz
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 3
+      - name: azurite-emulator
+        image: mcr.microsoft.com/azure-storage/azurite
+        imagePullPolicy: IfNotPresent
+        resources: {{- toYaml .Values.kubernetes.backend.resources | nindent 10 }}
+        ports:
+        - containerPort: 10000
+        - containerPort: 10001
+        - containerPort: 10002

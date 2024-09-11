@@ -1,0 +1,17 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "soundbuttons.fullname" . }}-backend-service
+  namespace: {{ .Release.Namespace }}
+  labels:
+  {{- include "soundbuttons.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: soundbuttonsbackend
+  {{- include "soundbuttons.selectorLabels" . | nindent 4 }}
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080

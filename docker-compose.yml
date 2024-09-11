@@ -5,10 +5,10 @@ services:
       target: final
       args:
         - BUILD_CONFIGURATION=Release
-      # cache_from:
-      #   - ghcr.io/recorder-moe/soundbuttons:cache
-      # cache_to:
-      #   - type=inline
+      cache_from:
+        - ghcr.io/sound-buttons/backend:cache
+      cache_to:
+        - type=inline
     ports:
       - 7071:8080
     env_file:

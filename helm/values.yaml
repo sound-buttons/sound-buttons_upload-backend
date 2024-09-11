@@ -1,0 +1,51 @@
+# host is your host name without https://
+# When using docker desktop kubernetes install ingress-nginx controller and use 'kubernetes.docker.internal' as host
+# https://kubernetes.github.io/ingress-nginx/deploy/#docker-desktop
+host: kubernetes.docker.internal
+
+# seq is the configuration for Seq logging server.
+# Please setup a Seq server externally and input the server url and api key here.
+seq:
+  serverUrl: https://12.34.56.78
+  apiKey: YOUR_API_KEY
+
+azureStorage:
+  connectionString: YOUR_AZURE_STORAGE_CONNECTION_STRING
+
+OpenAI:
+  apiKey: YOUR_OPENAI_API_KEY
+
+kubernetes:
+  clusterDomain: cluster.local
+
+  # ingress is for frontend and backend ingress settings.
+  ingress:
+    labels: {}
+
+    # traefik annotations: https://doc.traefik.io/traefik/routing/providers/kubernetes-ingress/#on-ingress
+    annotations:
+      {}
+      # traefik.ingress.kubernetes.io/router.tls: "true"
+      # traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+      # traefik.ingress.kubernetes.io/router.tls.domains.0.main: "*.sound-buttons.click"
+
+    tls: []
+    #  - secretName: chart-example-tls
+    #    hosts:
+    #      - chart-example.local
+
+    # When using Traefik set this to "traefik".
+    # When using docker desktop kubernetes install ingress-nginx controller and set this to "nginx".
+    className: nginx
+
+  backend:
+    # image is the image of the backend.
+    image: ghcr.io/sound-buttons/backend:latest
+    replicas: 1
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 1000Mi
+      requests:
+        cpu: 100m
+        memory: 300Mi
