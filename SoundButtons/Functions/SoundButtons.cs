@@ -325,16 +325,7 @@ public partial class SoundButtons(ILogger<SoundButtons> logger,
         return await processAudioService.TranscodeAudioAsync(tempPath);
     }
 
-    private static void CleanUp(string tempPath)
-    {
-        string? path = Path.GetDirectoryName(tempPath);
-        if (path == null)
-        {
-            return;
-        }
-
-        Directory.Delete(path, true);
-    }
+    private static void CleanUp(string tempPath) => File.Delete(tempPath);
 
     [Function("main-sound-buttons")]
     public async Task<bool> RunOrchestrator(
