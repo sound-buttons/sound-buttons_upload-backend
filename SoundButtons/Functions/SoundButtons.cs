@@ -27,7 +27,7 @@ public class SoundButtons(ILogger<SoundButtons> logger,
 
     [Function("sound-buttons")]
     public async Task<HttpResponseData> HttpStart(
-        [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)]
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = null)]
         HttpRequestData reqData,
         [DurableClient] DurableTaskClient starter)
     {
