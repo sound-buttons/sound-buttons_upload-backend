@@ -8,13 +8,15 @@ using static SoundButtons.Models.OpenAI;
 
 namespace SoundButtons.Services;
 
-public class OpenAIService
+public class OpenAiService
 {
+#pragma warning disable IDE1006 // 命名樣式
     private const string OpenAiEndpoint = "https://api.openai.com/v1/";
+#pragma warning restore IDE1006 // 命名樣式
     private static string? _apiKey = "";
     private readonly HttpClient _client;
 
-    public OpenAIService(ILogger<OpenAIService> logger, IHttpClientFactory httpClientFactory)
+    public OpenAiService(ILogger<OpenAiService> logger, IHttpClientFactory httpClientFactory)
     {
         _client = httpClientFactory.CreateClient("client");
         _client.BaseAddress = new Uri(OpenAiEndpoint);

@@ -10,7 +10,7 @@ using SoundButtons.Services;
 namespace SoundButtons.Functions;
 
 public class SpeechToText(ILogger<SpeechToText> logger,
-                          OpenAIService openAIService)
+                          OpenAiService openAIService)
 {
     private readonly ILogger _logger = logger;
 

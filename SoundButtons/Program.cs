@@ -68,7 +68,7 @@ try
                                       .WithName("sound-buttons");
                      });
 
-                     services.AddScoped(typeof(OpenAIService));
+                     services.AddScoped(typeof(OpenAiService));
                      services.AddScoped(typeof(ProcessAudioService));
                  })
                  .Build();
