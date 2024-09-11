@@ -21,7 +21,7 @@ public class ProcessAudioService
         _logger = logger;
 
         (_youtubeDLPath, string? ffmpegPath) = YoutubeDLHelper.WhereIs();
-        FFmpeg.SetExecutablesPath(ffmpegPath);
+        FFmpeg.SetExecutablesPath(Path.GetDirectoryName(ffmpegPath));
     }
 
     public Task<int> DownloadAudioAsync(string tempPath, Source source)

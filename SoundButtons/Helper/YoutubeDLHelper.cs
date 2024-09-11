@@ -19,7 +19,7 @@ internal static class YoutubeDLHelper
     {
         char splitChar = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ';' : ':';
 
-        DirectoryInfo tempDirectory = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), nameof(SoundButtons)));
+        DirectoryInfo tempDirectory = new(FileHelper.PrepareTempDir());
 
         // https://stackoverflow.com/a/63021455
         string[] paths = Environment.GetEnvironmentVariable("PATH")?.Split(splitChar) ?? [];

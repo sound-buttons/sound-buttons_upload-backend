@@ -22,6 +22,7 @@ public class ProcessAudio(ILogger<ProcessAudio> logger,
         string tempPath = Path.Combine(tempDir, DateTime.Now.Ticks + ".webm");
 
         logger.LogInformation("TempDir: {tempDir}", tempDir);
+        logger.LogInformation("TempPath: {tempPath}", tempPath);
 
         if (!string.IsNullOrEmpty(request.Source.VideoId))
         {
