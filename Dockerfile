@@ -99,10 +99,6 @@ ENV AzureWebJobsStorage=
 # https://stackoverflow.com/a/64404153/8706033
 ENV WEBSITE_HOSTNAME=localhost:8080
 
-ENV CORS_SUPPORT_CREDENTIALS=true
-ENV CORS_ALLOWED_ORIGINS=["https://localhost:4200"]
-ENV FrontEndUri=https://localhost:4200
-
 ENV Seq_ServerUrl=
 ENV Seq_ApiKey=
 ENV AzureStorage=
