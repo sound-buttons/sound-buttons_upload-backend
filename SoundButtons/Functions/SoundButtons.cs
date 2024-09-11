@@ -20,8 +20,8 @@ using SoundButtons.Services;
 
 namespace SoundButtons.Functions;
 
-public class SoundButtons(ILogger<SoundButtons> logger,
-                          ProcessAudioService processAudioService)
+public partial class SoundButtons(ILogger<SoundButtons> logger,
+                                  ProcessAudioService processAudioService)
 {
     private readonly ILogger _logger = logger;
 
@@ -51,7 +51,7 @@ public class SoundButtons(ILogger<SoundButtons> logger,
             return CreateBadRequestResponse(reqData, "No source found");
         }
 
-        if (fileData.Any() && fileData.First().Value.Length > 30 * 1024 * 1024)
+        if (fileData.Count != 0 && fileData.First().Value.Length > 30 * 1024 * 1024)
         {
             _logger.LogError("File size over 30MB.");
             return CreateBadRequestResponse(reqData, "File size over 30MB");
@@ -66,7 +66,7 @@ public class SoundButtons(ILogger<SoundButtons> logger,
                    source: source,
                    clip: await ProcessClip(formData, source),
                    toastId: formData.GetValueOrDefault("toastId") ?? "-1",
-                   tempPath: await ProcessAudioFileAsync(fileData, source),
+                   tempPath: await ProcessAudioFileAsync(fileData),
                    ip: reqData.Headers.TryGetValues("X-Forwarded-For", out IEnumerable<string>? forwardedFor) ? forwardedFor.First() : "",
                    nameZH: formData.GetValueOrDefault("nameZH") ?? "",
                    nameJP: formData.GetValueOrDefault("nameJP") ?? "",
@@ -75,14 +75,14 @@ public class SoundButtons(ILogger<SoundButtons> logger,
                );
     }
 
-    private HttpResponseData CreateBadRequestResponse(HttpRequestData reqData, string message)
+    private static HttpResponseData CreateBadRequestResponse(HttpRequestData reqData, string message)
     {
         HttpResponseData response = reqData.CreateResponse(HttpStatusCode.BadRequest);
         response.WriteString(message);
         return response;
     }
 
-    private async Task<(Dictionary<string, string> formData, Dictionary<string, byte[]> fileData)> ParseMultipartFormDataAsync(
+    private static async Task<(Dictionary<string, string> formData, Dictionary<string, byte[]> fileData)> ParseMultipartFormDataAsync(
         HttpRequestData reqData)
     {
         var formData = new Dictionary<string, string>();
@@ -167,7 +167,7 @@ public class SoundButtons(ILogger<SoundButtons> logger,
     {
         string? name = req.GetValueOrDefault("nameZH"); // 用於回傳
         string filename = name ?? "";
-        filename = Regex.Replace(filename, @"[^0-9a-zA-Z\p{L}]+", ""); // 比對通過英數、中日文字等(多位元組字元)
+        filename = GetFileName().Replace(filename, ""); // 比對通過英數、中日文字等(多位元組字元)
         if (filename.Length == 0)
             filename = Guid.NewGuid().ToString("n");
 
@@ -195,10 +195,7 @@ public class SoundButtons(ILogger<SoundButtons> logger,
         {
             // Regex for strip youtube video id from url c# and return default thumbnail
             // https://gist.github.com/Flatlineato/f4cc3f3937272646d4b0
-            source.VideoId = Regex.Match(
-                source.VideoId,
-                "https?:\\/\\/(?:[\\w-]+\\.)?(?:youtu\\.be\\/|youtube(?:-nocookie)?\\.com\\S*[^\\w\\s-])([\\w-]{11})(?=[^\\w-]|$)(?![?=&+%\\w.-]*(?:['\"][^<>]*>|<\\/a>))[?=&+%\\w.-]*",
-                RegexOptions.IgnoreCase).Groups[1].Value;
+            source.VideoId = GetYoutubeVideoId().Match(source.VideoId).Groups[1].Value;
 
             if (string.IsNullOrEmpty(source.VideoId))
             {
@@ -217,8 +214,8 @@ public class SoundButtons(ILogger<SoundButtons> logger,
 
     private async Task<string?> ProcessClip(Dictionary<string, string> req, Source source)
     {
-        Regex youtubeClipReg = new(@"https?:\/\/(?:[\w-]+\.)?(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/)clip\/[?=&+%\w.-]*");
-        Regex twitchClipReg = new(@"^(?:https?:\/\/(?:clips\.twitch\.tv\/|www\.twitch\.tv\/[a-z0-9_-]+\/clip\/))([a-zA-Z0-9_-]+)$");
+        Regex youtubeClipReg = GetYoutubeClip();
+        Regex twitchClipReg = GetTwitchClip();
 
         string? clip = req.GetValueOrDefault("clip");
         if (string.IsNullOrEmpty(clip))
@@ -231,6 +228,7 @@ public class SoundButtons(ILogger<SoundButtons> logger,
             return await ProcessYoutubeClip(req, source);
         }
 
+        // ReSharper disable once ConvertIfStatementToReturnStatement
         if (twitchClipReg.IsMatch(clip))
         {
             return ProcessTwitchClip(req, source);
@@ -242,7 +240,7 @@ public class SoundButtons(ILogger<SoundButtons> logger,
     private async Task<string?> ProcessYoutubeClip(Dictionary<string, string> req, Source source)
     {
         string? clip = req.GetValueOrDefault("clip");
-        Regex clipReg = new(@"https?:\/\/(?:[\w-]+\.)?(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/)clip\/[?=&+%\w.-]*");
+        Regex clipReg = GetYoutubeClip();
 
         if (string.IsNullOrEmpty(clip) || !clipReg.IsMatch(clip))
             return clip;
@@ -252,7 +250,7 @@ public class SoundButtons(ILogger<SoundButtons> logger,
         string body = await response.Content.ReadAsStringAsync();
 
         // "clipConfig":{"postId":"UgkxVQpxshiN76QUwblPu-ggj6fl594-ORiU","startTimeMs":"1891037","endTimeMs":"1906037"}
-        Regex reg1 = new(@"clipConfig"":{""postId"":""(?:[\w-]+)"",""startTimeMs"":""(\d+)"",""endTimeMs"":""(\d+)""}");
+        Regex reg1 = GetYoutubeClipConfigFromHtmlBody();
         Match match1 = reg1.Match(body);
         if (double.TryParse(match1.Groups[1].Value, out double _start)
             && double.TryParse(match1.Groups[2].Value, out double _end))
@@ -262,7 +260,7 @@ public class SoundButtons(ILogger<SoundButtons> logger,
         }
 
         // {"videoId":"Gs7QYATahy4"}
-        Regex reg2 = new(@"{""videoId"":""([\w-]+)""");
+        Regex reg2 = GetYoutubeClipVideoIdFromHtmlBody();
         Match match2 = reg2.Match(body);
         source.VideoId = match2.Groups[1].Value;
         _logger.LogInformation("Get info from clip: {videoId}, {start}, {end}", source.VideoId, source.Start, source.End);
@@ -270,7 +268,7 @@ public class SoundButtons(ILogger<SoundButtons> logger,
         return clip;
     }
 
-    private string? ProcessTwitchClip(Dictionary<string, string> req, Source source)
+    private static string? ProcessTwitchClip(Dictionary<string, string> req, Source source)
     {
         string? clip = req.GetValueOrDefault("clip");
         source.VideoId = string.Empty;
@@ -280,7 +278,7 @@ public class SoundButtons(ILogger<SoundButtons> logger,
         return clip;
     }
 
-    private async Task<string> ProcessAudioFileAsync(Dictionary<string, byte[]> req, Source source)
+    private async Task<string> ProcessAudioFileAsync(Dictionary<string, byte[]> req)
         => req.Count > 0
                ? await ProcessAudioFromFileUpload(req)
                : "";
@@ -361,4 +359,25 @@ public class SoundButtons(ILogger<SoundButtons> logger,
 
         return true;
     }
+
+    [GeneratedRegex(@"[^0-9a-zA-Z\p{L}]+")]
+    private static partial Regex GetFileName();
+
+    [GeneratedRegex(
+        "https?:\\/\\/(?:[\\w-]+\\.)?(?:youtu\\.be\\/|youtube(?:-nocookie)?\\.com\\S*[^\\w\\s-])([\\w-]{11})(?=[^\\w-]|$)(?![?=&+%\\w.-]*(?:['\"][^<>]*>|<\\/a>))[?=&+%\\w.-]*",
+        RegexOptions.IgnoreCase,
+        "zh-TW")]
+    private static partial Regex GetYoutubeVideoId();
+
+    [GeneratedRegex(@"https?:\/\/(?:[\w-]+\.)?(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/)clip\/[?=&+%\w.-]*")]
+    private static partial Regex GetYoutubeClip();
+
+    [GeneratedRegex(@"^(?:https?:\/\/(?:clips\.twitch\.tv\/|www\.twitch\.tv\/[a-z0-9_-]+\/clip\/))([a-zA-Z0-9_-]+)$")]
+    private static partial Regex GetTwitchClip();
+
+    [GeneratedRegex(@"clipConfig"":{""postId"":""(?:[\w-]+)"",""startTimeMs"":""(\d+)"",""endTimeMs"":""(\d+)""}")]
+    private static partial Regex GetYoutubeClipConfigFromHtmlBody();
+
+    [GeneratedRegex(@"{""videoId"":""([\w-]+)""")]
+    private static partial Regex GetYoutubeClipVideoIdFromHtmlBody();
 }

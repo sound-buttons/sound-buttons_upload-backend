@@ -66,7 +66,9 @@ public class ProcessJson
             }
 
             ms.Seek(0, SeekOrigin.Begin);
+#pragma warning disable CA1869
             var serializerOptions = new JsonSerializerOptions
+#pragma warning restore CA1869
             {
                 // Allow trailing commas in JSON
                 AllowTrailingCommas = true,
@@ -96,7 +98,9 @@ public class ProcessJson
                                    source
         );
 
+#pragma warning disable CA1869 // 快取並重新使用 'JsonSerializerOptions' 執行個體
         byte[] result = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(json, new JsonSerializerOptions { WriteIndented = true }));
+#pragma warning restore CA1869 // 快取並重新使用 'JsonSerializerOptions' 執行個體
 
         _logger.LogInformation("Write Json {name}", jsonBlob.Name);
         _logger.LogInformation("Write Json backup {name}", newJsonBlob.Name);
@@ -124,7 +128,7 @@ public class ProcessJson
             {
                 Name = new Text(group, group),
                 BaseRoute = baseRoute,
-                Buttons = new List<Button>()
+                Buttons = []
             };
 
             root.ButtonGroups.Add(buttonGroup);
