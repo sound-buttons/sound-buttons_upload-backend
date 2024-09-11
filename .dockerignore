@@ -11,3 +11,5 @@
 **/obj
 **/dist
 **/*.exe
+**/local.settings.json
+**/*.csproj.user

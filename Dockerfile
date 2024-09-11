@@ -90,6 +90,7 @@ ENV PATH="/home/site/wwwroot:/home/$UID/.local/bin:$PATH"
 ENV AzureWebJobsScriptRoot=/home/site/wwwroot
 ENV FUNCTIONS_WORKER_RUNTIME=dotnet-isolated
 ENV AzureFunctionsJobHost__Logging__Console__IsEnabled=true
+ENV AzureFunctionsJobHost__Logging__LogLevel__Default=Information
 
 # Set this to the connection string for the online storage account or the local emulator
 # https://learn.microsoft.com/zh-tw/azure/storage/common/storage-use-azurite#http-connection-strings

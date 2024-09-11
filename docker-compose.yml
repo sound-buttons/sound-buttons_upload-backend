@@ -19,6 +19,9 @@ services:
       # https://learn.microsoft.com/zh-tw/azure/storage/common/storage-use-azurite#well-known-storage-account-and-key
       - AzureWebJobsStorage=DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite-emulator:10000/devstoreaccount1;QueueEndpoint=http://azurite-emulator:10001/devstoreaccount1;TableEndpoint=http://azurite-emulator:10002/devstoreaccount1;
       # #
+      - AzureFunctionsJobHost__Logging__Console__IsEnabled=true
+      - AzureFunctionsJobHost__Logging__LogLevel__Default=Debug
+      # #
       # - Seq_ServerUrl=
       # - Seq_ApiKey=
       # - AzureStorage=
