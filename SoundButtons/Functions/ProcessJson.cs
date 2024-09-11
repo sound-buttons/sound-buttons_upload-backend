@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Web;
 using Azure.Storage.Blobs;
@@ -9,7 +10,6 @@ using Azure.Storage.Blobs.Models;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Azure;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 using Serilog.Context;
 using SoundButtons.Models;
 
@@ -66,18 +66,17 @@ public class ProcessJson
             }
 
             ms.Seek(0, SeekOrigin.Begin);
-            var serializerSettings = new JsonSerializerSettings
+            var serializerOptions = new JsonSerializerOptions
             {
                 // Allow trailing commas in JSON
-                FloatParseHandling = FloatParseHandling.Double,
+                AllowTrailingCommas = true,
                 // For Unicode and '&' characters
-                StringEscapeHandling = StringEscapeHandling.EscapeHtml
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
             };
 
             using var streamReader = new StreamReader(ms);
-            await using var jsonReader = new JsonTextReader(streamReader);
-            var serializer = JsonSerializer.CreateDefault(serializerSettings);
-            root = serializer.Deserialize<JsonRoot>(jsonReader);
+            var jsonString = await streamReader.ReadToEndAsync();
+            root = JsonSerializer.Deserialize<JsonRoot>(jsonString, serializerOptions);
         }
 
         if (null == root)
@@ -97,7 +96,7 @@ public class ProcessJson
                                    source
         );
 
-        byte[] result = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(json, Formatting.Indented));
+        byte[] result = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(json, new JsonSerializerOptions { WriteIndented = true }));
 
         _logger.LogInformation("Write Json {name}", jsonBlob.Name);
         _logger.LogInformation("Write Json backup {name}", newJsonBlob.Name);

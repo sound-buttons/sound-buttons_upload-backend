@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+﻿using System.Text.Json.Serialization;
 
 namespace SoundButtons.Models;
 #nullable disable
@@ -16,9 +16,9 @@ public class Source
         End = end;
     }
 
-    [JsonProperty("videoId")] public string VideoId { get; set; }
+    [JsonPropertyName("videoId")] public string VideoId { get; set; }
 
-    [JsonProperty("start")] public double Start { get; set; }
+    [JsonPropertyName("start")] public double Start { get; set; }
 
-    [JsonProperty("end")] public double End { get; set; }
+    [JsonPropertyName("end")] public double End { get; set; }
 }

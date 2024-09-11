@@ -1,30 +1,21 @@
-﻿using Newtonsoft.Json;
+﻿using System.Text.Json.Serialization;
 
 namespace SoundButtons.Models;
 #nullable disable
 
 public class Link
 {
-    [JsonProperty("youtube")]
-    public string Youtube { get; set; }
+    [JsonPropertyName("youtube")] public string Youtube { get; set; }
 
-    [JsonProperty("twitch")]
-    public string Twitch { get; set; }
+    [JsonPropertyName("twitch")] public string Twitch { get; set; }
 
-    [JsonProperty("twitter")]
-    public string Twitter { get; set; }
+    [JsonPropertyName("twitter")] public string Twitter { get; set; }
 
-    [JsonProperty("facebook")]
-    public string Facebook { get; set; }
+    [JsonPropertyName("facebook")] public string Facebook { get; set; }
 
-    [JsonProperty("instagram")]
-    public string Instagram { get; set; }
+    [JsonPropertyName("instagram")] public string Instagram { get; set; }
 
-    [JsonProperty("discord")]
-    public string Discord { get; set; }
+    [JsonPropertyName("discord")] public string Discord { get; set; }
 
-    [JsonProperty("other")]
-    public string Other { get; set; }
-
-    public Link() { }
+    [JsonPropertyName("other")] public string Other { get; set; }
 }

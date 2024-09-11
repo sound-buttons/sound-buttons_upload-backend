@@ -87,7 +87,7 @@ public class SoundButtons(ILogger<SoundButtons> logger,
     {
         var formData = new Dictionary<string, string>();
         var fileData = new Dictionary<string, byte[]>();
-        string? boundary = GetBoundary(reqData.Headers.GetValues("Content-Type").First());
+        string boundary = GetBoundary(reqData.Headers.GetValues("Content-Type").First());
         var reader = new MultipartReader(boundary, reqData.Body);
         while (await reader.ReadNextSectionAsync() is { } section)
         {
@@ -114,11 +114,11 @@ public class SoundButtons(ILogger<SoundButtons> logger,
         return (formData, fileData);
     }
 
-    private static string? GetBoundary(string contentType)
+    private static string GetBoundary(string contentType)
     {
         string[] elements = contentType.Split(';');
-        string? element = elements.FirstOrDefault(e => e.Trim().StartsWith("boundary="));
-        return element?.Split('=')[1].Trim('"');
+        string element = elements.First(e => e.Trim().StartsWith("boundary="));
+        return element.Split('=')[1].Trim('"');
     }
 
     private async Task<HttpResponseData> StartOrchestrator(HttpRequestData reqData,
@@ -342,7 +342,7 @@ public class SoundButtons(ILogger<SoundButtons> logger,
     public async Task<bool> RunOrchestrator(
         [OrchestrationTrigger] TaskOrchestrationContext context)
     {
-        Request request = context.GetInput<Request>();
+        Request request = context.GetInput<Request>()!;
         using IDisposable _ = LogContext.PushProperty("InstanceId", request.InstanceId);
 
         // 若表單有音檔，前一步驟會把檔案放入這個路徑
