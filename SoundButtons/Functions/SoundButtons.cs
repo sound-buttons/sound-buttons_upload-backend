@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.WebUtilities;
@@ -160,7 +161,22 @@ public partial class SoundButtons(ILogger<SoundButtons> logger,
 
         _logger.LogInformation("Started orchestration with ID {instanceId}.", instanceId);
 
-        return await starter.CreateCheckStatusResponseAsync(reqData, instanceId);
+        HttpResponseData response = await starter.CreateCheckStatusResponseAsync(reqData, instanceId);
+        if (reqData.Url.Host.Contains("localhost")) return response;
+
+        using var reader = new StreamReader(response.Body, Encoding.UTF8);
+        string body = await reader.ReadToEndAsync();
+        body = body.Replace("http:", "https:");
+        byte[] byteArray = Encoding.UTF8.GetBytes(body);
+
+        using MemoryStream stream = new();
+        stream.Write(byteArray, 0, byteArray.Length);
+
+        stream.Position = 0;
+        response.Body.Position = 0;
+        await stream.CopyToAsync(response.Body);
+
+        return response;
     }
 
     private string GetFileName(Dictionary<string, string> req)
