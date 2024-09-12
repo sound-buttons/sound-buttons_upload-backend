@@ -1,7 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Web;
@@ -68,13 +68,13 @@ public class ProcessJson
             ms.Seek(0, SeekOrigin.Begin);
 #pragma warning disable CA1869
             var serializerOptions = new JsonSerializerOptions
-#pragma warning restore CA1869
             {
                 // Allow trailing commas in JSON
                 AllowTrailingCommas = true,
                 // For Unicode and '&' characters
-                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+                Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
             };
+#pragma warning restore CA1869
 
             using var streamReader = new StreamReader(ms);
             var jsonString = await streamReader.ReadToEndAsync();
@@ -98,9 +98,15 @@ public class ProcessJson
                                    source
         );
 
-#pragma warning disable CA1869 // 快取並重新使用 'JsonSerializerOptions' 執行個體
-        byte[] result = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(json, new JsonSerializerOptions { WriteIndented = true }));
-#pragma warning restore CA1869 // 快取並重新使用 'JsonSerializerOptions' 執行個體
+#pragma warning disable CA1869
+        var jsonSerializerOptions = new JsonSerializerOptions
+        {
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            WriteIndented = true
+        };
+#pragma warning restore CA1869
+
+        byte[] result = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(json, jsonSerializerOptions));
 
         _logger.LogInformation("Write Json {name}", jsonBlob.Name);
         _logger.LogInformation("Write Json backup {name}", newJsonBlob.Name);
