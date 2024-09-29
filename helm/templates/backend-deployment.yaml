@@ -59,8 +59,8 @@ spec:
           timeoutSeconds: 2
           failureThreshold: 3
       - name: azurite-emulator
-        image: mcr.microsoft.com/azure-storage/azurite
-        imagePullPolicy: IfNotPresent
+        image: mcr.microsoft.com/azure-storage/azurite:latest
+        imagePullPolicy: Always
         resources: {{- toYaml .Values.kubernetes.backend.resources | nindent 10 }}
         ports:
         - containerPort: 10000
