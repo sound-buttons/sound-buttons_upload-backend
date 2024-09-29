@@ -340,6 +340,13 @@ public partial class SoundButtons(ILogger<SoundButtons> logger,
             request.TempPath = await context.CallActivityAsync<string>("ProcessAudioAsync", request);
         }
 
+        if (!File.Exists(request.TempPath))
+        {
+            _logger.LogError("File not found: {tempPath}", request.TempPath);
+            CleanUp(request.TempPath);
+            return false;
+        }
+
         request = await context.CallActivityAsync<Request>("UploadAudioToStorageAsync", request);
         request = await context.CallActivityAsync<Request>("SpeechToTextAsync", request);
 

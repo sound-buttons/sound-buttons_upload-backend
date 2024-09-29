@@ -27,6 +27,13 @@ public class ProcessAudio(ILogger<ProcessAudio> logger,
         if (!string.IsNullOrEmpty(request.Source.VideoId))
         {
             await processAudioService.DownloadAudioAsync(tempPath, request.Source);
+            // Download may fail, so we need to check if the file exists
+            if (!File.Exists(tempPath))
+            {
+                logger.LogError("Failed to download the video.");
+                return tempPath;
+            }
+
             await processAudioService.CutAudioAsync(tempPath, request.Source);
         }
         else if (!string.IsNullOrEmpty(request.Clip))
