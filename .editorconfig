@@ -1,4 +1,4 @@
-﻿[*.{cs,vb}]
+[*.{cs,vb}]
 
 # IDE0046: 轉換至條件運算式
 dotnet_diagnostic.IDE0046.severity = silent

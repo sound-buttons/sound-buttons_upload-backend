@@ -1,4 +1,4 @@
-﻿namespace SoundButtons.Models;
+namespace SoundButtons.Models;
 
 public class IntroButton : Button
 {
