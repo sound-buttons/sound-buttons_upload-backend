@@ -1,6 +1,6 @@
 [![CodeQL](https://github.com/sound-buttons/sound-buttons_upload-backend/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/sound-buttons/sound-buttons_upload-backend/actions/workflows/github-code-scanning/codeql)
-[![CodeFactor](https://www.codefactor.io/repository/github/sound-buttons/sound-buttons_upload-backend/badge)](https://www.codefactor.io/repository/github/sound-buttons/sound-buttons_upload-backend)  
-[![Build and deploy dotnet core app to Azure Function App - SoundButtonsEastAsia](https://github.com/jim60105/sound-buttons_upload-backend/actions/workflows/master_SoundButtonsEastAsia.yml/badge.svg)](https://github.com/jim60105/sound-buttons_upload-backend/actions/workflows/master_SoundButtonsEastAsia.yml)
+[![CodeFactor](https://www.codefactor.io/repository/github/sound-buttons/sound-buttons_upload-backend/badge)](https://www.codefactor.io/repository/github/sound-buttons/sound-buttons_upload-backend) [![docker_publish](https://github.com/sound-buttons/sound-buttons_upload-backend/actions/workflows/docker_publish.yml/badge.svg)](https://github.com/sound-buttons/sound-buttons_upload-backend/actions/workflows/docker_publish.yml)
+
 
 # LICENSE
 
