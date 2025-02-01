@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1
 
 # From the base image
-ARG UID=app
 ARG APP_UID=1654
+ARG UID=$APP_UID
 
 ARG VERSION=EDGE
 ARG RELEASE=0
@@ -19,18 +19,13 @@ ARG TARGETVARIANT
 
 WORKDIR /app
 
-RUN --mount=type=cache,id=apt-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/var/cache/apt \
-    --mount=type=cache,id=aptlists-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/var/lib/apt/lists \
-    apt-get update && apt-get install -y --no-install-recommends \
-    python3
-
 ARG UID
 # ffmpeg
-COPY --link --chown=$UID:0 --chmod=775 --from=ghcr.io/jim60105/static-ffmpeg-upx:7.0-1 /ffmpeg /usr/bin/
-COPY --link --chown=$UID:0 --chmod=775 --from=ghcr.io/jim60105/static-ffmpeg-upx:7.0-1 /ffprobe /usr/bin/
+COPY --link --chown=$UID:0 --chmod=775 --from=ghcr.io/jim60105/static-ffmpeg-upx:7.1 /ffmpeg /usr/bin/
+COPY --link --chown=$UID:0 --chmod=775 --from=ghcr.io/jim60105/static-ffmpeg-upx:7.1 /ffprobe /usr/bin/
 
 # yt-dlp
-ADD --link --chown=$UID:0 --chmod=775 https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp /usr/bin/yt-dlp
+ADD --link --chown=$UID:0 --chmod=775 https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux /usr/bin/yt-dlp
 
 ########################################
 # Build stage
@@ -68,10 +63,11 @@ RUN chown -R $UID:0 /azure-functions-host && \
 # Create directories with correct permissions
 RUN install -d -m 775 -o $UID -g 0 /home/site/wwwroot && \
     install -d -m 775 -o $UID -g 0 /home/.cache && \
-    install -d -m 775 -o $UID -g 0 /licenses
+    install -d -m 775 -o $UID -g 0 /licenses && \
+    install -d -m 775 -o $UID -g 0 /tmp
 
 # dumb-init
-COPY --link --chown=$UID:0 --chmod=775 --from=ghcr.io/jim60105/static-ffmpeg-upx:7.0-1 /dumb-init /usr/bin/
+COPY --link --chown=$UID:0 --chmod=775 --from=ghcr.io/jim60105/static-ffmpeg-upx:7.1 /dumb-init /usr/bin/
 
 COPY --link --chown=$UID:0 --chmod=775 --from=ghcr.io/tarampampam/curl:8.8.0 /bin/curl /bin/curl
 HEALTHCHECK --interval=10s --timeout=2s --retries=3 --start-period=20s CMD [ \
@@ -80,7 +76,6 @@ HEALTHCHECK --interval=10s --timeout=2s --retries=3 --start-period=20s CMD [ \
 
 # Copy licenses (OpenShift Policy)
 COPY --link --chown=$UID:0 --chmod=775 LICENSE /licenses/LICENSE
-COPY --link --chown=$UID:0 --chmod=775 --from=ghcr.io/jim60105/yt-dlp:distroless /licenses/yt-dlp.LICENSE /licenses/yt-dlp.LICENSE
 
 # Copy dist
 COPY --link --chown=$UID:0 --chmod=775 --from=publish /app /home/site/wwwroot
@@ -94,21 +89,25 @@ ENV AzureFunctionsJobHost__Logging__LogLevel__Default=Information
 
 # Set this to the connection string for the online storage account or the local emulator
 # https://learn.microsoft.com/zh-tw/azure/storage/common/storage-use-azurite#http-connection-strings
-ENV AzureWebJobsStorage=
+ENV AzureWebJobsStorage=""
 
 # Issue: Azure Durable Function HttpStart failure: Webhooks are not configured
 # https://stackoverflow.com/a/64404153/8706033
 ENV WEBSITE_HOSTNAME=localhost:8080
 
-ENV Seq_ServerUrl=
-ENV Seq_ApiKey=
-ENV AzureStorage=
-ENV OpenAI_ApiKey=
+ENV Seq_ServerUrl=""
+ENV Seq_ApiKey=""
+ENV AzureStorage=""
+ENV OpenAI_ApiKey=""
 
 EXPOSE 8080
 ENV ASPNETCORE_URLS=http://+:8080
 
 USER $UID:0
+
+VOLUME [ "/tmp" ]
+
+WORKDIR /tmp
 
 STOPSIGNAL SIGINT
 
