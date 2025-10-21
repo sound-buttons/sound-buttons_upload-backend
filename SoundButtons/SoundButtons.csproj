@@ -42,8 +42,11 @@
     <PackageReference Include="Serilog.AspNetCore" Version="8.0.2" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
     <PackageReference Include="Serilog.Sinks.Seq" Version="8.0.0" />
+    <PackageReference Include="System.Net.Http" Version="4.3.4" />
+    <PackageReference Include="System.Text.Json" Version="9.0.10" />
+    <PackageReference Include="System.Text.RegularExpressions" Version="4.3.1" />
     <PackageReference Include="Xabe.FFmpeg" Version="5.2.6" />
-    <PackageReference Include="YoutubeDLSharp" Version="1.1.1" />
+    <PackageReference Include="YoutubeDLSharp" Version="1.1.2" />
   </ItemGroup>
   <ItemGroup>
     <None Update="host.json">
