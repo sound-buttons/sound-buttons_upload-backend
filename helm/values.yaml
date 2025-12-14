@@ -3,6 +3,12 @@
 # https://kubernetes.github.io/ingress-nginx/deploy/#docker-desktop
 host: kubernetes.docker.internal
 
+# frontend_host is your frontend host name without https://
+# This is used to setup cors allowed origins in the backend.
+# When using Traefik as ingress controller, a CORS middleware will be automatically
+# created and configured to allow requests from https://<frontend_host>.
+frontend_host: sound-buttons.click
+
 # seq is the configuration for Seq logging server.
 # Please setup a Seq server externally and input the server url and api key here.
 seq:

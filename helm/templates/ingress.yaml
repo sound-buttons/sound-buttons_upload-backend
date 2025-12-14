@@ -9,8 +9,11 @@ metadata:
 {{- if .Values.kubernetes.ingress.labels }}
 {{ toYaml .Values.kubernetes.ingress.labels | indent 4 }}
 {{- end }}
-{{- with .Values.kubernetes.ingress.annotations }}
   annotations:
+{{- if eq .Values.kubernetes.ingress.className "traefik" }}
+    traefik.ingress.kubernetes.io/router.middlewares: {{ .Release.Namespace }}-{{ include "soundbuttons.fullname" . }}-cors@kubernetescrd
+{{- end }}
+{{- with .Values.kubernetes.ingress.annotations }}
 {{ toYaml . | indent 4 }}
 {{- end }}
 spec:

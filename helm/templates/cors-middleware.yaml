@@ -1,0 +1,26 @@
+{{- if eq .Values.kubernetes.ingress.className "traefik" }}
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ include "soundbuttons.fullname" . }}-cors
+  namespace: {{ .Release.Namespace }}
+  labels:
+{{- include "soundbuttons.labels" . | nindent 4 }}
+spec:
+  headers:
+    accessControlAllowOriginList:
+      - "https://{{ .Values.frontend_host }}"
+    accessControlAllowMethods:
+      - GET
+      - POST
+      - PUT
+      - PATCH
+      - DELETE
+      - OPTIONS
+    accessControlAllowHeaders:
+      - Content-Type
+      - Authorization
+    accessControlMaxAge: 86400
+    addVaryHeader: true
+{{- end }}
