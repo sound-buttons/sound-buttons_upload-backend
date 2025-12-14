@@ -40,9 +40,10 @@ FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 
 WORKDIR /source
 
+# Copy csproj and restore dependencies
+COPY SoundButtons/SoundButtons.csproj ./SoundButtons/
 ARG TARGETARCH
-RUN --mount=source=SoundButtons/SoundButtons.csproj,target=SoundButtons.csproj \
-    dotnet restore -a $TARGETARCH "SoundButtons.csproj"
+RUN dotnet restore -a $TARGETARCH "SoundButtons/SoundButtons.csproj"
 
 ########################################
 # Publish stage
@@ -51,9 +52,11 @@ FROM build AS publish
 
 ARG BUILD_CONFIGURATION
 
+# Copy the rest of the source files
+COPY SoundButtons/ ./SoundButtons/
+
 ARG TARGETARCH
-RUN --mount=source=SoundButtons/.,target=.,rw \
-    dotnet publish "SoundButtons.csproj" -a $TARGETARCH -c $BUILD_CONFIGURATION -o /app
+RUN dotnet publish "SoundButtons/SoundButtons.csproj" -a $TARGETARCH -c $BUILD_CONFIGURATION -o /app --no-restore
 
 ########################################
 # Final stage
