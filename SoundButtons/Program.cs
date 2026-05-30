@@ -42,7 +42,7 @@ try
                      services.AddHttpClient("client",
                                             config =>
                                             {
-                                                config.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue(".NET", "8.0"));
+                                                config.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue(".NET", "10.0"));
                                                 config.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("Sound-Buttons", "1.0"));
                                                 config.DefaultRequestHeaders.UserAgent.Add(
                                                     new ProductInfoHeaderValue("(+https://sound-buttons.click)"));

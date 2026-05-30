@@ -21,6 +21,10 @@ services:
       # #
       - AzureFunctionsJobHost__Logging__Console__IsEnabled=true
       - AzureFunctionsJobHost__Logging__LogLevel__Default=Debug
+      # The Blob client (audio/JSON upload) reads AzureStorage (not AzureWebJobsStorage).
+      # Point it at Azurite for local end-to-end upload testing; override with a real
+      # connection string via .env for non-local use.
+      - AzureStorage=DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite-emulator:10000/devstoreaccount1;QueueEndpoint=http://azurite-emulator:10001/devstoreaccount1;TableEndpoint=http://azurite-emulator:10002/devstoreaccount1;
       # #
       # - Seq_ServerUrl=
       # - Seq_ApiKey=
@@ -31,6 +35,10 @@ services:
   # You can use your online azure storage account instead and make sure to set the AzureWebJobsStorage env variable to the online connection string
   azurite-emulator:
     image: mcr.microsoft.com/azure-storage/azurite
+    # --skipApiVersionCheck: the upgraded Azure.Storage.Blobs SDK negotiates a newer
+    # Storage REST API version than Azurite currently validates; this flag is required
+    # for local development only and has no effect on real Azure Storage.
+    command: "azurite -l /data --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0 --skipApiVersionCheck"
     ports:
       - 10000:10000
       - 10001:10001

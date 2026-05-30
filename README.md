@@ -1,6 +1,23 @@
 [![CodeQL](https://github.com/sound-buttons/sound-buttons_upload-backend/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/sound-buttons/sound-buttons_upload-backend/actions/workflows/github-code-scanning/codeql)
 [![CodeFactor](https://www.codefactor.io/repository/github/sound-buttons/sound-buttons_upload-backend/badge)](https://www.codefactor.io/repository/github/sound-buttons/sound-buttons_upload-backend) [![docker_publish](https://github.com/sound-buttons/sound-buttons_upload-backend/actions/workflows/docker_publish.yml/badge.svg)](https://github.com/sound-buttons/sound-buttons_upload-backend/actions/workflows/docker_publish.yml)
 
+## Development
+
+This project is an Azure Functions v4 app running on the **.NET 10 isolated worker**.
+
+Prerequisites:
+
+- **.NET 10 SDK** (`mcr.microsoft.com/dotnet/sdk:10.0` if building in a container)
+- **Docker / Podman** for the containerized runtime and the Azurite storage emulator
+
+Run locally with the bundled emulator:
+
+```bash
+docker compose up --build
+```
+
+The Functions host listens on `http://localhost:7071` (health check at `/api/healthz`).
+
 ## LICENSE
 
 > Use Xabe.FFmpeg with the [License Agreement](https://ffmpeg.xabe.net/license.html) under non-commercial use.  
