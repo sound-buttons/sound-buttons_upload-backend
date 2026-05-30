@@ -20,6 +20,9 @@ spec:
         app: soundbuttonsbackend
       {{- include "soundbuttons.selectorLabels" . | nindent 8 }}
     spec:
+      # The backend does not call the Kubernetes API; do not mount its
+      # ServiceAccount API token (override via kubernetes.backend.automountServiceAccountToken).
+      automountServiceAccountToken: {{ .Values.kubernetes.backend.automountServiceAccountToken }}
       containers:
       - name: soundbuttonsbackend
         securityContext:

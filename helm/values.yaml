@@ -48,6 +48,11 @@ kubernetes:
     # image is the image of the backend.
     image: ghcr.io/sound-buttons/backend:latest
     replicas: 1
+    # The backend never calls the Kubernetes API server, so its ServiceAccount
+    # API token is not needed. Leaving it disabled keeps an unused credential out
+    # of the pod (defense-in-depth). Set to true only if a future deployment
+    # genuinely needs in-cluster Kubernetes API access.
+    automountServiceAccountToken: false
     resources:
       limits:
         cpu: 1000m
