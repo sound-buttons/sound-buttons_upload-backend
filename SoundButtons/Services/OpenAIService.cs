@@ -8,7 +8,7 @@ using static SoundButtons.Models.OpenAI;
 
 namespace SoundButtons.Services;
 
-public class OpenAiService
+public class OpenAiService : IOpenAiService
 {
 #pragma warning disable IDE1006 // 命名樣式
     private const string OpenAiEndpoint = "https://api.openai.com/v1/";

@@ -264,3 +264,10 @@ __pycache__/
 *.pyc
 .env
 tmp/**
+
+# Coverage reports
+coverage*.xml
+coverage*.json
+*.cobertura.xml
+SoundButtons.Tests/cov.xml
+/out/

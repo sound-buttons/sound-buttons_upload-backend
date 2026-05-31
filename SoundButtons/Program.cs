@@ -1,14 +1,8 @@
 using System;
-using System.Net.Http.Headers;
-using Microsoft.Azure.WebJobs.Extensions.OpenApi.Core.Abstractions;
-using Microsoft.Azure.WebJobs.Extensions.OpenApi.Core.Configurations;
-using Microsoft.Azure.WebJobs.Extensions.OpenApi.Core.Enums;
-using Microsoft.Extensions.Azure;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using Serilog.Events;
-using SoundButtons.Services;
+using SoundButtons;
 #if !RELEASE
 using Serilog.Debugging;
 #endif
@@ -37,40 +31,7 @@ try
     IHost host = new HostBuilder()
                  .ConfigureFunctionsWebApplication()
                  .UseSerilog()
-                 .ConfigureServices(services =>
-                 {
-                     services.AddHttpClient("client",
-                                            config =>
-                                            {
-                                                config.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue(".NET", "10.0"));
-                                                config.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("Sound-Buttons", "1.0"));
-                                                config.DefaultRequestHeaders.UserAgent.Add(
-                                                    new ProductInfoHeaderValue("(+https://sound-buttons.click)"));
-                                            });
-
-                     services.AddSingleton<IOpenApiConfigurationOptions>(_ =>
-                     {
-                         var options = new OpenApiConfigurationOptions
-                         {
-                             Servers = DefaultOpenApiConfigurationOptions.GetHostNames(),
-                             OpenApiVersion = OpenApiVersionType.V3,
-                             IncludeRequestingHostName = true,
-                             ForceHttps = false,
-                             ForceHttp = false
-                         };
-
-                         return options;
-                     });
-
-                     services.AddAzureClients(clientBuilder =>
-                     {
-                         clientBuilder.AddBlobServiceClient(Environment.GetEnvironmentVariable("AzureStorage"))
-                                      .WithName("sound-buttons");
-                     });
-
-                     services.AddScoped(typeof(OpenAiService));
-                     services.AddScoped(typeof(ProcessAudioService));
-                 })
+                 .ConfigureServices(services => services.AddSoundButtonsServices())
                  .Build();
 
     host.Run();

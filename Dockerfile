@@ -62,6 +62,53 @@ ARG TARGETARCH
 RUN dotnet publish "SoundButtons/SoundButtons.csproj" -a $TARGETARCH -c $BUILD_CONFIGURATION -o /app --no-restore
 
 ########################################
+# Test stage
+########################################
+# Runs unit + integration tests on the build platform (tests execute natively, so no
+# cross-arch emulation). The static ffmpeg/ffprobe binaries enable the encoder
+# integration tests; coverage is enforced via the coverlet.msbuild threshold configured
+# in the test project. Results are written to /testresults for the report stage to export.
+FROM build AS test
+
+# ffmpeg/ffprobe for the encoder integration tests (no network required: media is
+# synthesized with lavfi virtual inputs).
+COPY --chmod=775 --from=ghcr.io/jim60105/static-ffmpeg-upx:8.1 /ffmpeg /usr/local/bin/
+COPY --chmod=775 --from=ghcr.io/jim60105/static-ffmpeg-upx:8.1 /ffprobe /usr/local/bin/
+
+# yt-dlp for the generic download-path integration test (driven against a local file://
+# URL, so still no network is required at test time).
+ADD --chmod=775 https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux /usr/local/bin/yt-dlp
+
+WORKDIR /source
+
+# Restore the test project (and its reference to the production project) for the build
+# platform so the test host runs natively.
+COPY SoundButtons.Tests/SoundButtons.Tests.csproj ./SoundButtons.Tests/
+RUN dotnet restore "SoundButtons.Tests/SoundButtons.Tests.csproj"
+
+# Copy the rest of the source files (production project already copied is not, so copy both)
+COPY SoundButtons/ ./SoundButtons/
+COPY SoundButtons.Tests/ ./SoundButtons.Tests/
+
+# Run tests with coverage. The coverlet.msbuild Threshold (85, line+branch, total) in the
+# test csproj fails the build if coverage regresses. Cobertura + TRX are emitted for CI.
+RUN dotnet test "SoundButtons.Tests/SoundButtons.Tests.csproj" \
+        -c Debug \
+        --results-directory /testresults \
+        --logger "trx;LogFileName=test-results.trx" \
+        -p:CollectCoverage=true \
+        "-p:CoverletOutputFormat=cobertura%2cjson" \
+        -p:CoverletOutput=/testresults/
+
+########################################
+# Report stage
+########################################
+# Minimal scratch image whose sole purpose is to export the test results/coverage to the
+# host via `docker build --target report --output type=local,dest=...`.
+FROM scratch AS report
+COPY --from=test /testresults /testresults
+
+########################################
 # Download stage
 ########################################
 FROM --platform=$BUILDPLATFORM ${BASE_IMAGE} AS download

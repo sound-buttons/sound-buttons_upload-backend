@@ -21,7 +21,8 @@ using SoundButtons.Services;
 namespace SoundButtons.Functions;
 
 public partial class SoundButtons(ILogger<SoundButtons> logger,
-                                  ProcessAudioService processAudioService)
+                                  IProcessAudioService processAudioService,
+                                  IHttpClientFactory httpClientFactory)
 {
     private readonly ILogger _logger = logger;
 
@@ -82,7 +83,7 @@ public partial class SoundButtons(ILogger<SoundButtons> logger,
         return response;
     }
 
-    private static async Task<(Dictionary<string, string> formData, Dictionary<string, byte[]> fileData)> ParseMultipartFormDataAsync(
+    internal static async Task<(Dictionary<string, string> formData, Dictionary<string, byte[]> fileData)> ParseMultipartFormDataAsync(
         HttpRequestData reqData)
     {
         var formData = new Dictionary<string, string>();
@@ -114,7 +115,7 @@ public partial class SoundButtons(ILogger<SoundButtons> logger,
         return (formData, fileData);
     }
 
-    private static string GetBoundary(string contentType)
+    internal static string GetBoundary(string contentType)
     {
         string[] elements = contentType.Split(';');
         string element = elements.First(e => e.Trim().StartsWith("boundary="));
@@ -163,7 +164,7 @@ public partial class SoundButtons(ILogger<SoundButtons> logger,
         return await starter.CreateCheckStatusResponseAsync(reqData, instanceId);
     }
 
-    private string GetFileName(Dictionary<string, string> req)
+    internal string GetFileName(Dictionary<string, string> req)
     {
         string? name = req.GetValueOrDefault("nameZH"); // 用於回傳
         string filename = name ?? "";
@@ -175,7 +176,7 @@ public partial class SoundButtons(ILogger<SoundButtons> logger,
         return filename;
     }
 
-    private Source GetSourceInfo(Dictionary<string, string> req)
+    internal Source GetSourceInfo(Dictionary<string, string> req)
     {
         var source = new Source
         {
@@ -212,7 +213,7 @@ public partial class SoundButtons(ILogger<SoundButtons> logger,
         return source;
     }
 
-    private async Task<string?> ProcessClip(Dictionary<string, string> req, Source source)
+    internal async Task<string?> ProcessClip(Dictionary<string, string> req, Source source)
     {
         Regex youtubeClipReg = GetYoutubeClip();
         Regex twitchClipReg = GetTwitchClip();
@@ -237,7 +238,7 @@ public partial class SoundButtons(ILogger<SoundButtons> logger,
         return null;
     }
 
-    private async Task<string?> ProcessYoutubeClip(Dictionary<string, string> req, Source source)
+    internal async Task<string?> ProcessYoutubeClip(Dictionary<string, string> req, Source source)
     {
         string? clip = req.GetValueOrDefault("clip");
         Regex clipReg = GetYoutubeClip();
@@ -245,7 +246,7 @@ public partial class SoundButtons(ILogger<SoundButtons> logger,
         if (string.IsNullOrEmpty(clip) || !clipReg.IsMatch(clip))
             return clip;
 
-        using HttpClient client = new();
+        HttpClient client = httpClientFactory.CreateClient("client");
         HttpResponseMessage response = await client.GetAsync(clip);
         string body = await response.Content.ReadAsStringAsync();
 
@@ -268,7 +269,7 @@ public partial class SoundButtons(ILogger<SoundButtons> logger,
         return clip;
     }
 
-    private static string? ProcessTwitchClip(Dictionary<string, string> req, Source source)
+    internal static string? ProcessTwitchClip(Dictionary<string, string> req, Source source)
     {
         string? clip = req.GetValueOrDefault("clip");
         source.VideoId = string.Empty;
@@ -283,7 +284,7 @@ public partial class SoundButtons(ILogger<SoundButtons> logger,
                ? await ProcessAudioFromFileUpload(req)
                : "";
 
-    private Source SourceCheck(Source source)
+    internal Source SourceCheck(Source source)
     {
         if (string.IsNullOrEmpty(source.VideoId))
         {

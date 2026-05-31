@@ -1,0 +1,96 @@
+name: test
+
+# Runs the test suite (with the >=85% line+branch coverage gate enforced inside
+# the Docker `test` stage) and the infrastructure conformance checks. The Docker
+# build fails on any test or coverage-gate failure, so coverage is enforced
+# independently of Codecov.
+on:
+  pull_request:
+  push:
+    branches:
+      - "master"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  conformance:
+    name: Infra conformance checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Assert .NET target framework and Functions version
+        run: |
+          grep -q '<TargetFramework>net10.0</TargetFramework>' SoundButtons/SoundButtons.csproj
+          grep -q '<AzureFunctionsVersion>v4</AzureFunctionsVersion>' SoundButtons/SoundButtons.csproj
+
+      - name: Assert Dockerfile image and tool pins
+        run: |
+          # .NET 10 base/build/sdk images
+          grep -Eq 'mcr\.microsoft\.com/dotnet/sdk:10\.0' Dockerfile
+          # ffmpeg pinned to 8.1
+          grep -q 'static-ffmpeg-upx:8.1' Dockerfile
+          # dumb-init pinned to v1.2.5 with checksum verification
+          grep -q 'dumb-init/releases/download/v1.2.5/' Dockerfile
+          grep -q 'sha256sum -c -' Dockerfile
+
+      - name: Assert container init process (dumb-init PID 1)
+        run: |
+          grep -q 'ENTRYPOINT \[ "dumb-init"' Dockerfile
+          grep -q 'STOPSIGNAL SIGINT' Dockerfile
+          # dumb-init must come from the dedicated checksum-verified `download` stage,
+          # not be bundled with the ffmpeg image, and must not run with --single-child.
+          grep -q 'COPY .*--from=download /dumb-init' Dockerfile
+          ! grep -q 'single-child' Dockerfile
+
+      - name: Lint Dockerfile (hadolint)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Assert Kubernetes automountServiceAccountToken disabled by default
+        run: |
+          helm template helm | grep -q 'automountServiceAccountToken: false'
+
+  test:
+    name: Test suite + coverage
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      # The `test` stage runs the suite and enforces the >=85% line+branch gate;
+      # the build fails here on any test or coverage failure. The `report` stage
+      # exports the Cobertura XML + TRX for Codecov.
+      - name: Run tests and export coverage report
+        run: |
+          docker build --target report --output type=local,dest=./out -f Dockerfile .
+
+      # The design requires CI to confirm the production image still builds; the
+      # test/report stages are off the production path, so build `final` explicitly.
+      - name: Build production image (final stage)
+        run: |
+          docker build --target final -t soundbuttons-final-ci -f Dockerfile .
+
+      - name: Upload coverage to Codecov
+        if: ${{ env.CODECOV_TOKEN != '' }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./out/testresults/coverage.cobertura.xml
+          fail_ci_if_error: false

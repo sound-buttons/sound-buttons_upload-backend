@@ -12,7 +12,7 @@ using YoutubeDLSharp.Options;
 
 namespace SoundButtons.Services;
 
-public class ProcessAudioService
+public class ProcessAudioService : IProcessAudioService
 {
     private readonly ILogger _logger;
     private readonly string? _youtubeDLPath;
@@ -25,11 +25,14 @@ public class ProcessAudioService
         FFmpeg.SetExecutablesPath(Path.GetDirectoryName(ffmpegPath));
     }
 
-    public Task<int> DownloadAudioAsync(string tempPath, Source source)
-    {
-        if (string.IsNullOrEmpty(source.VideoId)) throw new ArgumentNullException(nameof(source));
-
-        OptionSet optionSet = new()
+    /// <summary>
+    ///     Build the yt-dlp options used to download the best audio stream of a YouTube
+    ///     video id and trim it to the requested section. Extracted as a pure,
+    ///     dependency-free builder so the options can be asserted without running the
+    ///     external process.
+    /// </summary>
+    internal static OptionSet BuildVideoIdOptionSet(Source source, string tempPath)
+        => new()
         {
             // 最佳音質
             Format = "251/140",
@@ -38,6 +41,24 @@ public class ProcessAudioService
             ExtractorArgs = "youtube:skip=dash",
             DownloadSections = $"*{source.Start}-{source.End}"
         };
+
+    /// <summary>
+    ///     Build the yt-dlp options used to download a generic clip URL. Extracted as a
+    ///     pure, dependency-free builder so the options can be asserted without running
+    ///     the external process.
+    /// </summary>
+    internal static OptionSet BuildClipOptionSet(string url, string tempPath)
+        => new()
+        {
+            NoCheckCertificates = true,
+            Output = tempPath
+        };
+
+    public Task<int> DownloadAudioAsync(string tempPath, Source source)
+    {
+        if (string.IsNullOrEmpty(source.VideoId)) throw new ArgumentNullException(nameof(source));
+
+        OptionSet optionSet = BuildVideoIdOptionSet(source, tempPath);
 
         // 下載音訊來源
         _logger.LogInformation("Start to download audio source from youtube {videoId}", source.VideoId);
@@ -62,11 +83,7 @@ public class ProcessAudioService
     {
         if (string.IsNullOrEmpty(url)) throw new ArgumentNullException(nameof(url));
 
-        OptionSet optionSet = new()
-        {
-            NoCheckCertificates = true,
-            Output = tempPath
-        };
+        OptionSet optionSet = BuildClipOptionSet(url, tempPath);
 
         // 下載音訊來源
         _logger.LogInformation("Start to download audio source from url {url}", url);

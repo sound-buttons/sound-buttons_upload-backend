@@ -1,0 +1,19 @@
+coverage:
+  status:
+    project:
+      default:
+        target: 85%
+        threshold: 1%
+    patch:
+      default:
+        target: 85%
+        threshold: 1%
+
+comment:
+  layout: "reach, diff, flags, files"
+  require_changes: false
+
+ignore:
+  - "SoundButtons/Program.cs"
+  - "SoundButtons/**/SourceGenerationContext.cs"
+  - "SoundButtons.Tests/**"

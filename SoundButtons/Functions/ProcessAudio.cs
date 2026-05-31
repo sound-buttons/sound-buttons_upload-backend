@@ -11,7 +11,7 @@ using SoundButtons.Services;
 namespace SoundButtons.Functions;
 
 public class ProcessAudio(ILogger<ProcessAudio> logger,
-                          ProcessAudioService processAudioService)
+                          IProcessAudioService processAudioService)
 {
     [Function("ProcessAudioAsync")]
     public async Task<string> ProcessAudioAsync(

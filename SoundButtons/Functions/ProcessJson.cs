@@ -117,7 +117,7 @@ public class ProcessJson
                            jsonBlob.UploadAsync(new BinaryData(result), option));
     }
 
-    private JsonRoot UpdateJson(JsonRoot root, string directory, string filename, Request request, Source source)
+    internal JsonRoot UpdateJson(JsonRoot root, string directory, string filename, Request request, Source source)
     {
         _logger.LogInformation("Update Json");
 
