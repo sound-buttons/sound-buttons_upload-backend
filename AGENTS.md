@@ -1,8 +1,4 @@
-# AGENTS.md
-
-Guidance for AI coding agents working in this repository.
-
-## Project overview
+# Sound Buttons Upload Backend
 
 This is the **upload backend** for [Sound Buttons](https://sound-buttons.click) — an
 Azure Functions app that ingests user-submitted audio clips, acquires/encodes them, runs
@@ -110,14 +106,3 @@ specs under `openspec/changes/<id>/`) and validate with
 `openspec validate <change-id> --strict` before implementing. `openspec/specs/` holds the
 current capability specs.
 
-## Commits
-
-Use Conventional Commit messages (`type: description`) in English. Append the trailer:
-
-```
-Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
-```
-
-## License
-
-AGPLv3. Note the third-party license terms in `README.md` (Xabe.FFmpeg is non-commercial).
