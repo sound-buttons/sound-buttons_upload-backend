@@ -8,10 +8,13 @@ ARG VERSION=EDGE
 ARG RELEASE=0
 ARG BUILD_CONFIGURATION=Release
 
+# Runtime base image, pinned once and shared by the base and download stages
+ARG BASE_IMAGE=mcr.microsoft.com/azure-functions/dotnet-isolated:4-dotnet-isolated10.0
+
 ########################################
 # Base stage
 ########################################
-FROM mcr.microsoft.com/azure-functions/dotnet-isolated:4-dotnet-isolated10.0 AS base
+FROM ${BASE_IMAGE} AS base
 
 # RUN mount cache for multi-arch: https://github.com/docker/buildx/issues/549#issuecomment-1788297892
 ARG TARGETARCH
@@ -59,6 +62,25 @@ ARG TARGETARCH
 RUN dotnet publish "SoundButtons/SoundButtons.csproj" -a $TARGETARCH -c $BUILD_CONFIGURATION -o /app --no-restore
 
 ########################################
+# Download stage
+########################################
+FROM --platform=$BUILDPLATFORM ${BASE_IMAGE} AS download
+
+ARG TARGETARCH
+
+# Download the official Yelp/dumb-init static binary (arch-aware) and verify its
+# SHA256 against the upstream-published checksum; the build fails on mismatch.
+# curl and ca-certificates are already provided by the base image.
+RUN case "${TARGETARCH}" in \
+      amd64) DUMBINIT_ARCH="x86_64"; DUMBINIT_SHA256="e874b55f3279ca41415d290c512a7ba9d08f98041b28ae7c2acb19a545f1c4df" ;; \
+      arm64) DUMBINIT_ARCH="aarch64"; DUMBINIT_SHA256="b7d648f97154a99c539b63c55979cd29f005f88430fb383007fe3458340b795e" ;; \
+      *) echo "unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
+    esac && \
+    curl -fsSL --retry 3 --retry-all-errors --connect-timeout 15 "https://github.com/Yelp/dumb-init/releases/download/v1.2.5/dumb-init_1.2.5_${DUMBINIT_ARCH}" \
+      -o /dumb-init && \
+    echo "${DUMBINIT_SHA256}  /dumb-init" | sha256sum -c -
+
+########################################
 # Final stage
 ########################################
 FROM base AS final
@@ -76,7 +98,7 @@ RUN install -d -m 775 -o $UID -g 0 /home/site/wwwroot && \
     install -d -m 775 -o $UID -g 0 /tmp
 
 # dumb-init
-COPY --link --chown=$UID:0 --chmod=775 --from=ghcr.io/jim60105/static-ffmpeg-upx:8.0 /dumb-init /usr/bin/
+COPY --link --chown=$UID:0 --chmod=775 --from=download /dumb-init /usr/bin/
 
 # Copy licenses (OpenShift Policy)
 COPY --link --chown=$UID:0 --chmod=775 LICENSE /licenses/LICENSE
