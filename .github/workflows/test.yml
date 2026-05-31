@@ -52,7 +52,7 @@ jobs:
           dockerfile: Dockerfile
 
       - name: Set up Helm
-        uses: azure/setup-helm@v4
+        uses: azure/setup-helm@v5
 
       - name: Assert Kubernetes automountServiceAccountToken disabled by default
         run: |
@@ -89,7 +89,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         if: ${{ env.CODECOV_TOKEN != '' }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./out/testresults/coverage.cobertura.xml
