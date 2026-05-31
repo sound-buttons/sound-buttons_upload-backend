@@ -1,30 +1,9 @@
-# audio-acquisition-encoding Specification
+## RENAMED Requirements
 
-## Purpose
+- FROM: `### Requirement: Transcode uploaded audio to WebM without video`
+- TO: `### Requirement: Transcode media to audio-only WebM without video`
 
-Defines how the service obtains and shapes the raw audio for a sound button:
-downloading source audio with `yt-dlp` (YoutubeDLSharp), trimming a time range and
-transcoding to WebM with FFmpeg (Xabe.FFmpeg), and locating the bundled `yt-dlp`
-and `ffmpeg` executables at runtime. Implemented in
-`SoundButtons/Services/ProcessAudioService.cs`, `SoundButtons/Functions/ProcessAudio.cs`,
-and `SoundButtons/Helper/YoutubeDLHelper.cs`. All produced audio is normalized to
-the `.webm` container.
-## Requirements
-### Requirement: Download audio from a YouTube video id
-
-When a submission carries a `Source.VideoId`, the service SHALL download the audio
-from `https://youtu.be/<videoId>` using `yt-dlp` with audio-only format
-selection `251/140`, certificate checking disabled, the YouTube `skip=dash`
-extractor argument, and a download-sections argument restricting the download to
-the `Start`–`End` time range. A missing/empty `VideoId` SHALL raise an argument
-error.
-
-#### Scenario: Section download for a video id
-
-- **GIVEN** a `Source` with a non-empty `VideoId` and a `Start`/`End` range
-- **WHEN** `DownloadAudioAsync` runs
-- **THEN** `yt-dlp` is invoked for `https://youtu.be/<videoId>` with format `251/140` and a `*Start-End` download section
-- **AND** the audio is written to the provided temp path
+## MODIFIED Requirements
 
 ### Requirement: Download audio from a clip URL
 
@@ -80,32 +59,6 @@ orchestrator's file-existence guard, which aborts the workflow.
 - **WHEN** the orchestrator resumes after acquisition
 - **THEN** its file-existence guard detects the missing file and aborts the workflow
 
-### Requirement: Trim a downloaded clip to its duration
-
-For a video-id source, after downloading the section the service SHALL cut the
-audio to the requested duration (`End - Start`) using FFmpeg with an
-`-sseof -<duration>` pre-input seek, writing a `.webm` output that replaces the
-working temp file.
-
-#### Scenario: Cut to requested length
-
-- **GIVEN** a downloaded audio file and a `Source` duration
-- **WHEN** `CutAudioAsync` runs
-- **THEN** FFmpeg trims the tail `duration` seconds via `-sseof -<duration>` and overwrites the temp file with the `.webm` result
-
-### Requirement: Runtime tool discovery
-
-The service SHALL locate the `yt-dlp` and `ffmpeg` executables at startup by
-searching the current directory, the temp directory, and each `PATH` entry (using
-`PATHEXT` extensions where applicable), and SHALL configure FFmpeg with the
-discovered executables directory.
-
-#### Scenario: Executables resolved from PATH
-
-- **GIVEN** `yt-dlp` and `ffmpeg` are present on `PATH` (or the current/temp directory)
-- **WHEN** the service initializes
-- **THEN** their full paths are resolved and FFmpeg's executables path is set to the `ffmpeg` directory
-
 ### Requirement: Transcode media to audio-only WebM without video
 
 The service SHALL provide a shared transform that converts an arbitrary input
@@ -132,4 +85,3 @@ acquisition path.
 - **WHEN** the shared transform runs
 - **THEN** the audio is re-encoded to Opus so the `.webm` output is valid and playable
 - **AND** the transform does not rely on a stream copy that would fail for that container/codec
-

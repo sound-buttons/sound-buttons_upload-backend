@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -126,9 +127,19 @@ public class ProcessAudioService
         string outputPath = Path.GetTempFileName();
         outputPath = Path.ChangeExtension(outputPath, ".webm");
 
+        // Map only the audio stream(s) and re-encode to Opus so the output is a
+        // valid audio-only WebM regardless of the source container/codec (for
+        // example AAC in MP4/TS as delivered by Twitch clips). Video, subtitle,
+        // data, and attachment streams are excluded by selecting audio only.
+        var audioStreams = mediaInfo.AudioStreams.ToList();
+        if (audioStreams.Count == 0)
+        {
+            _logger.LogError("No audio stream found in {path}", tempPath);
+            throw new InvalidOperationException($"Input media contains no audio stream: {tempPath}");
+        }
+
         IConversion conversion = FFmpeg.Conversions.New()
-                                       .AddStream(mediaInfo.Streams)
-                                       .AddParameter("-map -0:v")
+                                       .AddStream(audioStreams.Select(s => s.SetCodec(AudioCodec.libopus)))
                                        .SetOutput(outputPath)
                                        .SetOverwriteOutput(true);
 

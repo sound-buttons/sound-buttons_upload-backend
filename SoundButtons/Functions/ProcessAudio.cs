@@ -39,6 +39,16 @@ public class ProcessAudio(ILogger<ProcessAudio> logger,
         else if (!string.IsNullOrEmpty(request.Clip))
         {
             await processAudioService.DownloadAudioAsync(tempPath, request.Clip);
+            // Download may fail, so we need to check if the file exists
+            if (!File.Exists(tempPath))
+            {
+                logger.LogError("Failed to download the clip.");
+                return tempPath;
+            }
+
+            // Clip downloads (for example Twitch clips) may contain video, so
+            // transform to an audio-only WebM before continuing the pipeline.
+            return await processAudioService.TranscodeAudioAsync(tempPath);
         }
 
         return tempPath;
