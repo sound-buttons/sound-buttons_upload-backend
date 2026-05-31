@@ -64,6 +64,21 @@ spec:
       - name: azurite-emulator
         image: mcr.microsoft.com/azure-storage/azurite:latest
         imagePullPolicy: Always
+        # --skipApiVersionCheck: the upgraded Azure.Storage.Blobs SDK negotiates a newer
+        # Storage REST API version than Azurite currently validates, which otherwise fails
+        # Durable task-hub creation with "The API version ... is not supported by Azurite".
+        # This sidecar only backs AzureWebJobsStorage; it has no effect on real Azure Storage.
+        command: ["azurite"]
+        args:
+          - "-l"
+          - "/data"
+          - "--blobHost"
+          - "0.0.0.0"
+          - "--queueHost"
+          - "0.0.0.0"
+          - "--tableHost"
+          - "0.0.0.0"
+          - "--skipApiVersionCheck"
         resources: {{- toYaml .Values.kubernetes.backend.resources | nindent 10 }}
         ports:
         - containerPort: 10000
