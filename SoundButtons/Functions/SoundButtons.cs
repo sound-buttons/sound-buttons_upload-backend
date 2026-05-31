@@ -313,7 +313,7 @@ public partial class SoundButtons(ILogger<SoundButtons> logger,
         // 有音檔，直接寫到暫存路徑使用
         KeyValuePair<string, byte[]> file = files.First();
         // Get file info
-        string fileExtension = Path.GetExtension(file.Key) ?? "";
+        string fileExtension = Path.GetExtension(file.Key);
         tempPath = Path.ChangeExtension(tempPath, fileExtension);
         _logger.LogInformation("Get extension: {fileExtension}", fileExtension);
         await using (var fs = new FileStream(tempPath, FileMode.OpenOrCreate, FileAccess.Write))

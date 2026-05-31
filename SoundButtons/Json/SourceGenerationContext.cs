@@ -1,13 +1,15 @@
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using SoundButtons.Models;
 
 namespace SoundButtons.Json;
 
-// Must read:
-// https://learn.microsoft.com/en-us/dotnet/standard/serialization/system-text-json/source-generation?pivots=dotnet-8-0
+// System.Text.Json source-generated metadata for the types the service (de)serializes.
+// Declaring JsonRoot pulls in every reachable model type (ButtonGroup, Button, Source,
+// Text, Color, Link, IntroButton); TranscriptionsResponse covers the OpenAI path.
+//
+// NOTE: serializer behavior (encoder, indentation, trailing-comma tolerance) is configured
+// on the runtime JsonSerializerOptions in SoundButtons.Json.JsonSerialization, NOT via
+// [JsonSourceGenerationOptions]. The runtime options are authoritative.
 [JsonSerializable(typeof(JsonRoot))]
-[JsonSerializable(typeof(Text))]
-[JsonSerializable(typeof(string))]
-[JsonSourceGenerationOptions(WriteIndented = true, AllowTrailingCommas = true, ReadCommentHandling = JsonCommentHandling.Skip)]
+[JsonSerializable(typeof(OpenAI.TranscriptionsResponse))]
 internal partial class SourceGenerationContext : JsonSerializerContext;

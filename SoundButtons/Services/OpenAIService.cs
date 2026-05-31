@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using SoundButtons.Json;
 using static SoundButtons.Models.OpenAI;
 
 namespace SoundButtons.Services;
@@ -62,7 +63,7 @@ public class OpenAiService : IOpenAiService
         response.EnsureSuccessStatusCode();
 
         string json = await response.Content.ReadAsStringAsync();
-        return JsonSerializer.Deserialize<TranscriptionsResponse>(json);
+        return JsonSerializer.Deserialize<TranscriptionsResponse>(json, JsonSerialization.OpenAi);
     }
 
     private static bool CheckApiKey() => !string.IsNullOrEmpty(_apiKey);

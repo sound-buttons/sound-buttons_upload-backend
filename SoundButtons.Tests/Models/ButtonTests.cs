@@ -1,3 +1,4 @@
+using System.Text.Json;
 using SoundButtons.Models;
 using Xunit;
 
@@ -28,6 +29,35 @@ public class ButtonTests
         var button = new Button { Volume = input };
 
         Assert.Equal(expected, button.Volume);
+    }
+
+    [Fact]
+    public void Deserialize_ExplicitZeroVolume_NormalizesToOne()
+    {
+        Button? button = JsonSerializer.Deserialize<Button>("{\"filename\":\"f.webm\",\"volume\":0}");
+
+        Assert.NotNull(button);
+        Assert.Equal(1f, button!.Volume);
+    }
+
+    [Fact]
+    public void Deserialize_OmittedVolume_DefaultsToOne()
+    {
+        // The parameterless constructor runs first (setting Volume to 1); with no "volume"
+        // member in the payload the setter is never invoked, so the default of 1 is retained.
+        Button? button = JsonSerializer.Deserialize<Button>("{\"filename\":\"f.webm\"}");
+
+        Assert.NotNull(button);
+        Assert.Equal(1f, button!.Volume);
+    }
+
+    [Fact]
+    public void Deserialize_NonZeroVolume_IsPreserved()
+    {
+        Button? button = JsonSerializer.Deserialize<Button>("{\"filename\":\"f.webm\",\"volume\":0.3}");
+
+        Assert.NotNull(button);
+        Assert.Equal(0.3f, button!.Volume);
     }
 
     [Fact]

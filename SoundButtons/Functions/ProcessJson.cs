@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Text;
-using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Web;
@@ -11,6 +10,7 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Azure;
 using Microsoft.Extensions.Logging;
 using Serilog.Context;
+using SoundButtons.Json;
 using SoundButtons.Models;
 
 namespace SoundButtons.Functions;
@@ -66,19 +66,9 @@ public class ProcessJson
             }
 
             ms.Seek(0, SeekOrigin.Begin);
-#pragma warning disable CA1869
-            var serializerOptions = new JsonSerializerOptions
-            {
-                // Allow trailing commas in JSON
-                AllowTrailingCommas = true,
-                // For Unicode and '&' characters
-                Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-            };
-#pragma warning restore CA1869
-
             using var streamReader = new StreamReader(ms);
             var jsonString = await streamReader.ReadToEndAsync();
-            root = JsonSerializer.Deserialize<JsonRoot>(jsonString, serializerOptions);
+            root = JsonSerializer.Deserialize<JsonRoot>(jsonString, JsonSerialization.ConfigJson);
         }
 
         if (null == root)
@@ -98,15 +88,7 @@ public class ProcessJson
                                    source
         );
 
-#pragma warning disable CA1869
-        var jsonSerializerOptions = new JsonSerializerOptions
-        {
-            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-            WriteIndented = true
-        };
-#pragma warning restore CA1869
-
-        byte[] result = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(json, jsonSerializerOptions));
+        byte[] result = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(json, JsonSerialization.ConfigJson));
 
         _logger.LogInformation("Write Json {name}", jsonBlob.Name);
         _logger.LogInformation("Write Json backup {name}", newJsonBlob.Name);

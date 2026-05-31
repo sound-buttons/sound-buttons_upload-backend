@@ -76,7 +76,7 @@ public class ProcessAudioService : IProcessAudioService
         return youtubeDLProcess.RunAsync(
             [$"https://youtu.be/{source.VideoId}"],
             optionSet,
-            new CancellationToken());
+            CancellationToken.None);
     }
 
     public Task<int> DownloadAudioAsync(string tempPath, string url)
@@ -101,7 +101,7 @@ public class ProcessAudioService : IProcessAudioService
         return youtubeDLProcess.RunAsync(
             [url],
             optionSet,
-            new CancellationToken());
+            CancellationToken.None);
     }
 
     public async Task CutAudioAsync(string tempPath, Source source)
