@@ -1,5 +1,8 @@
 using System;
 using System.Net.Http.Headers;
+using System.Text.Json;
+using Azure.Core.Serialization;
+using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.WebJobs.Extensions.OpenApi.Core.Abstractions;
 using Microsoft.Azure.WebJobs.Extensions.OpenApi.Core.Configurations;
 using Microsoft.Azure.WebJobs.Extensions.OpenApi.Core.Enums;
@@ -18,6 +21,16 @@ internal static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddSoundButtonsServices(this IServiceCollection services)
     {
+        // Serialize worker HTTP responses (e.g. the Durable check-status payload returned by
+        // CreateCheckStatusResponseAsync) with camelCase web defaults. The default isolated
+        // worker serializer emits PascalCase, which breaks the frontend that reads
+        // `statusQueryGetUri`; the Durable status webhook already returns camelCase.
+        services.Configure<WorkerOptions>(workerOptions =>
+        {
+            workerOptions.Serializer = new JsonObjectSerializer(
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        });
+
         services.AddHttpClient("client",
                                config =>
                                {
