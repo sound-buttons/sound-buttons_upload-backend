@@ -36,6 +36,9 @@ COPY --link --chown=$UID:0 --chmod=775 --from=ghcr.io/jim60105/bgutil-pot:latest
 # yt-dlp
 ADD --link --chown=$UID:0 --chmod=775 https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux /usr/bin/yt-dlp
 
+# Deno (runtime dependency for yt-dlp)
+COPY --link --chown=$UID:0 --chmod=775 --from=docker.io/denoland/deno:bin /deno /usr/bin/deno
+
 ########################################
 # Build stage
 ########################################
@@ -138,7 +141,7 @@ ARG UID
 RUN chown -R $UID:0 /azure-functions-host && \
     chmod -R g=u /azure-functions-host
 
-# Create directories with correct permissions
+# Create directories with correct permissions (/home/.cache services runtime tool caches such as Deno and yt-dlp)
 RUN install -d -m 775 -o $UID -g 0 /home/site/wwwroot && \
     install -d -m 775 -o $UID -g 0 /home/.cache && \
     install -d -m 775 -o $UID -g 0 /licenses && \

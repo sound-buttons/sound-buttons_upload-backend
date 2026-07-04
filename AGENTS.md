@@ -92,9 +92,10 @@ optional speech-to-text, and publishes the result to Azure Blob Storage.
 
 - `SoundButtons.csproj`: `TargetFramework=net10.0`, `AzureFunctionsVersion=v4`.
 - `Dockerfile`: .NET 10 base/build/sdk images; ffmpeg pinned to `static-ffmpeg-upx:8.1`;
-  `dumb-init v1.2.5` from the dedicated checksum-verified `download` stage (verified with
-  `sha256sum -c -`), not bundled with the ffmpeg image; `ENTRYPOINT` first element is
-  `dumb-init` (no `--single-child`); `STOPSIGNAL SIGINT`. The image runs non-root.
+  Deno runtime copied from `denoland/deno:bin`; `dumb-init v1.2.5` from the dedicated
+  checksum-verified `download` stage (verified with `sha256sum -c -`), not bundled with
+  the ffmpeg image; `ENTRYPOINT` first element is `dumb-init` (no `--single-child`);
+  `STOPSIGNAL SIGINT`. The image runs non-root.
 - Helm: `automountServiceAccountToken: false` by default on the backend Deployment.
 - `Dockerfile` must pass `hadolint`.
 
